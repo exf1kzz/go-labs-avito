@@ -17,12 +17,12 @@ type HTTPConfig struct {
 }
 
 type DatabaseConfig struct {
-	URL                   string
-	MaxConnections        int32
-	MinConnections        int32
-	MaxConnectionLifetime time.Duration
-	ConnectTimeout        time.Duration
-	QueryTimeout          time.Duration
+	URL             string
+	MaxConns        int32
+	MinConns        int32
+	MaxConnLifetime time.Duration
+	ConnectTimeout  time.Duration
+	QueryTimeout    time.Duration
 }
 
 type Config struct {
@@ -86,17 +86,17 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	config.Database.MaxConnections, err = requiredInt32("DATABASE_MAX_CONNS")
+	config.Database.MaxConns, err = requiredInt32("DATABASE_MAX_CONNS")
 	if err != nil {
 		return Config{}, err
 	}
 
-	config.Database.MinConnections, err = requiredInt32("DATABASE_MIN_CONNS")
+	config.Database.MinConns, err = requiredInt32("DATABASE_MIN_CONNS")
 	if err != nil {
 		return Config{}, err
 	}
 
-	config.Database.MaxConnectionLifetime, err = requiredDuration("DATABASE_MAX_CONN_LIFETIME")
+	config.Database.MaxConnLifetime, err = requiredDuration("DATABASE_MAX_CONN_LIFETIME")
 	if err != nil {
 		return Config{}, err
 	}
@@ -111,11 +111,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	if config.Database.MaxConnections <= 0 {
+	if config.Database.MaxConns <= 0 {
 		return Config{}, fmt.Errorf("DATABASE_MAX_CONNS must be positive")
 	}
 
-	if config.Database.MinConnections > config.Database.MaxConnections {
+	if config.Database.MinConns > config.Database.MaxConns {
 		return Config{}, fmt.Errorf(
 			"DATABASE_MIN_CONNS must not exceed DATABASE_MAX_CONNS",
 		)

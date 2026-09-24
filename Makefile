@@ -1,4 +1,4 @@
-.PHONY: generate run test test-race
+.PHONY: generate run test test-race start stop status connect
 
 generate:
 	mkdir -p internal/generated
@@ -15,3 +15,15 @@ test:
 
 test-race:
 	go test -race ./...
+
+start:
+	tripgoctl environment start
+
+stop:
+	tripgoctl environment stop
+
+status:
+	tripgoctl environment status
+
+connect:
+	tripgoctl connect
