@@ -1,5 +1,5 @@
 .PHONY: generate run test test-race start stop status connect \
-	migrate-up migrate-down migrate-down-all migrate-status
+	migrate migrate-down migrate-down-all migrate-status
 
 generate:
 	mkdir -p internal/generated
@@ -29,7 +29,7 @@ status:
 connect:
 	tripgoctl connect
 
-migrate-up:
+migrate:
 	set -a; . ./.env; set +a; go tool goose -dir migrations postgres "$$DATABASE_URL" up
 
 migrate-down:
