@@ -13,7 +13,9 @@ import (
 	"github.com/exf1kzz/go-labs-avito/internal/config"
 	"github.com/exf1kzz/go-labs-avito/internal/handler"
 	"github.com/exf1kzz/go-labs-avito/internal/postgres"
+	"github.com/exf1kzz/go-labs-avito/internal/repository"
 	"github.com/exf1kzz/go-labs-avito/internal/router"
+	"github.com/exf1kzz/go-labs-avito/internal/service"
 )
 
 func main() {
@@ -46,7 +48,11 @@ func run(ctx context.Context) error {
 		cfg.Database.MaxConns,
 	)
 
-	tripHandler := handler.New(pool, cfg.Database.QueryTimeout)
+	transactionManager := postgres.NewTransactionManager(pool)
+	tripRepository := repository.NewTripRepository(transactionManager)
+	tripService := service.NewTripService(tripRepository, transactionManager)
+
+	tripHandler := handler.New(pool, tripService, cfg.Database.QueryTimeout)
 	httpHandler := router.New(tripHandler)
 
 	server := &http.Server{
