@@ -32,3 +32,18 @@ func writeProblem(
 
 	_ = json.NewEncoder(w).Encode(response)
 }
+
+func WriteInvalidRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	writeProblem(
+		w,
+		r,
+		http.StatusBadRequest,
+		"https://tripgo.example/problems/invalid-request",
+		"Invalid request",
+		"Request validation failed",
+		"invalid_request",
+	)
+}

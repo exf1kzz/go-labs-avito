@@ -18,15 +18,7 @@ func (h *Handler) CreateTrip(
 ) {
 	request, err := decodeCreateTripRequest(w, r)
 	if err != nil {
-		writeProblem(
-			w,
-			r,
-			http.StatusBadRequest,
-			"https://tripgo.example/problems/invalid-request",
-			"Invalid request",
-			"Request validation failed",
-			"invalid_request",
-		)
+		WriteInvalidRequest(w, r)
 		return
 	}
 
