@@ -11,7 +11,7 @@ import (
 func (s *TripService) Get(
 	ctx context.Context,
 	tripID uuid.UUID,
-	) (model.Trip, error) {
+) (model.Trip, error) {
 	trip, err := s.repository.GetByID(ctx, tripID)
 	if err != nil {
 		return model.Trip{}, fmt.Errorf("get trip: %w", err)

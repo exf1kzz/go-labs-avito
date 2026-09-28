@@ -9,13 +9,12 @@ generate:
 		contracts/openapi/trip-service.openapi.yaml
 
 run:
-	set -a; . ./.env; set +a; go run ./cmd/trip-service
+	set -a; . ./.env.example; . ./.env; set +a; go run ./cmd/trip-service
 
 test:
-	go test ./...
-
-test-race:
 	go test -race ./...
+
+test-race: test
 
 start:
 	tripgoctl environment start

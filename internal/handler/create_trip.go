@@ -68,13 +68,5 @@ func (h *Handler) writeCreateTripError(
 		return
 	}
 
-	writeProblem(
-		w,
-		r,
-		http.StatusInternalServerError,
-		"https://tripgo.example/problems/internal-error",
-		"Internal Server Error",
-		"Internal server error",
-		"internal_error",
-	)
+	writeInternalError(w, r, err)
 }

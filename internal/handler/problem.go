@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	api "github.com/exf1kzz/go-labs-avito/internal/generated"
@@ -45,5 +46,28 @@ func WriteInvalidRequest(
 		"Invalid request",
 		"Request validation failed",
 		"invalid_request",
+	)
+}
+
+func writeInternalError(
+	w http.ResponseWriter,
+	r *http.Request,
+	err error,
+) {
+	log.Printf(
+		"internal request error: method=%s path=%s error=%v",
+		r.Method,
+		r.URL.Path,
+		err,
+	)
+
+	writeProblem(
+		w,
+		r,
+		http.StatusInternalServerError,
+		"https://tripgo.example/problems/internal-error",
+		"Internal Server Error",
+		"Internal server error",
+		"internal_error",
 	)
 }
