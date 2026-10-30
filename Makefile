@@ -9,7 +9,7 @@ generate:
 		contracts/openapi/trip-service.openapi.yaml
 
 run:
-	set -a; . ./.env.example; . ./.env; set +a; go run ./cmd/trip-service
+	set -a; . ./.env.example; . ./.env; set +a; go run ./cmd/service
 
 test:
 	go test -race ./...
