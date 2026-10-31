@@ -9,7 +9,6 @@ import (
 	"net/http"
 
 	api "github.com/exf1kzz/go-labs-avito/internal/generated"
-	"github.com/google/uuid"
 )
 
 const maxRequestBodySize = 1 << 20
@@ -39,10 +38,6 @@ func decodeCreateTripRequest(
 	}
 
 	if err := validateRequiredTripFields(body); err != nil {
-		return api.TripData{}, err
-	}
-
-	if err := validateTripData(request); err != nil {
 		return api.TripData{}, err
 	}
 
@@ -81,41 +76,9 @@ func validateRequiredTripFields(body []byte) error {
 		for _, coordinate := range []string{"latitude", "longitude"} {
 			value, ok := pointFields[coordinate]
 			if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				return fmt.Errorf("field %q.%s is required", name, coordinate)
+				return fmt.Errorf("field %q is required", name+"."+coordinate)
 			}
 		}
-	}
-
-	return nil
-}
-
-func validateTripData(request api.TripData) error {
-	if request.UserId == uuid.Nil {
-		return errors.New("user_id must not be empty")
-	}
-
-	if request.DriverId == uuid.Nil {
-		return errors.New("driver_id must not be empty")
-	}
-
-	if request.StartPoint.Latitude < -90 || request.StartPoint.Latitude > 90 {
-		return errors.New("start_point.latitude is out of range")
-	}
-
-	if request.StartPoint.Longitude < -180 || request.StartPoint.Longitude > 180 {
-		return errors.New("start_point.longitude is out of range")
-	}
-
-	if request.EndPoint.Latitude < -90 || request.EndPoint.Latitude > 90 {
-		return errors.New("end_point.latitude is out of range")
-	}
-
-	if request.EndPoint.Longitude < -180 || request.EndPoint.Longitude > 180 {
-		return errors.New("end_point.longitude is out of range")
-	}
-
-	if request.Price < 0 {
-		return errors.New("price must not be negative")
 	}
 
 	return nil

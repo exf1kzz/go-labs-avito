@@ -7,3 +7,12 @@ var (
 	ErrTripCompleted = errors.New("trip completed")
 	ErrDriverBusy    = errors.New("driver busy")
 )
+
+type ValidationError struct {
+	Field  string
+	Reason string
+}
+
+func (e *ValidationError) Error() string {
+	return e.Field + " " + e.Reason
+}

@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-//go:generate mockgen -source=contract.go -destination=mocks_test.go -package=get_test
+//go:generate go tool mockgen -source=contract.go -destination=mocks_test.go -package=get_test
 type usecase interface {
 	Execute(context.Context, uuid.UUID) (domaintrip.Trip, error)
 }

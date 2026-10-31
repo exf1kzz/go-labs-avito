@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-//go:generate mockgen -source=contract.go -destination=mocks_test.go -package=create_test
+//go:generate go tool mockgen -source=contract.go -destination=mocks_test.go -package=create_test
 type tripRepository interface {
 	Create(ctx context.Context, trip domaintrip.Trip) error
 	AddStatusHistory(

@@ -11,7 +11,12 @@ import (
 )
 
 func Problem(err error) (int, api.Problem) {
+	var validationErr *domaintrip.ValidationError
+
 	switch {
+	case errors.As(err, &validationErr):
+		return problem(http.StatusBadRequest, "invalid-request", "Invalid request",
+			validationErr.Error(), "invalid_request")
 	case errors.Is(err, domaintrip.ErrDriverBusy):
 		return problem(http.StatusConflict, "driver-busy", "Driver busy",
 			"Driver already has an active trip", "driver_busy")
