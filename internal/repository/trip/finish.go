@@ -7,9 +7,10 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 )
 
 func (r *TripRepository) Finish(

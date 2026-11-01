@@ -5,10 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
-	getuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/get"
 	"github.com/google/uuid"
 	"go.uber.org/mock/gomock"
+
+	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
+	getuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/get"
 )
 
 func TestExecute(t *testing.T) {

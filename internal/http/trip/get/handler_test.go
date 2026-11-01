@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"go.uber.org/mock/gomock"
+
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	api "github.com/exf1kzz/go-labs-avito/internal/generated"
 	gethttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/get"
-	"github.com/google/uuid"
-	"go.uber.org/mock/gomock"
 )
 
 func TestGetTrip(t *testing.T) {

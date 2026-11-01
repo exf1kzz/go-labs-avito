@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/exf1kzz/go-labs-avito/internal/config"
 	transport "github.com/exf1kzz/go-labs-avito/internal/http"
 	createhttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/create"
@@ -16,7 +18,6 @@ import (
 	createuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/create"
 	finishuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/finish"
 	getuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/get"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Container struct {

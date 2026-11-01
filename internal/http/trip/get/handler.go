@@ -22,7 +22,8 @@ func New(usecase usecase, queryTimeout time.Duration) *Handler {
 func (h *Handler) GetTrip(
 	w http.ResponseWriter,
 	r *http.Request,
-	tripID api.TripId) {
+	tripID api.TripId,
+) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.queryTimeout)
 	defer cancel()
 

@@ -3,7 +3,7 @@ package domainerror
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
@@ -32,11 +32,11 @@ func Problem(err error) (int, api.Problem) {
 	}
 }
 
-func problem(status int, slug, title, detail, code string) (int, api.Problem) {
-	return status, api.Problem{
+func problem(status int32, slug, title, detail, code string) (int, api.Problem) {
+	return int(status), api.Problem{
 		Type:   "https://tripgo.example/problems/" + slug,
 		Title:  title,
-		Status: int32(status),
+		Status: status,
 		Detail: &detail,
 		Code:   code,
 	}
@@ -45,9 +45,13 @@ func problem(status int, slug, title, detail, code string) (int, api.Problem) {
 func Write(w http.ResponseWriter, r *http.Request, err error) {
 	status, body := Problem(err)
 	if status == http.StatusInternalServerError {
-		log.Printf("internal request error: method=%s path=%s error=%v",
-			r.Method, r.URL.Path, err)
+		slog.Error("internal request error",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"error", err,
+		)
 	}
+
 	write(w, r, status, body)
 }
 

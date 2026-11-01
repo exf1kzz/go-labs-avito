@@ -7,9 +7,10 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
-	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 )
 
 func (r *TripRepository) Create(
@@ -29,7 +30,8 @@ func (r *TripRepository) Create(
 			"price",
 			"status",
 			"started_at",
-			"finished_at").
+			"finished_at",
+		).
 		Values(
 			trip.ID,
 			trip.UserID,
@@ -41,10 +43,10 @@ func (r *TripRepository) Create(
 			trip.Price,
 			trip.Status,
 			trip.StartedAt,
-			trip.FinishedAt).
+			trip.FinishedAt,
+		).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
-
 	if err != nil {
 		return fmt.Errorf("build insert trip query: %w", err)
 	}

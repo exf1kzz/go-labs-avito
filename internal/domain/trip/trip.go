@@ -13,6 +13,8 @@ const (
 	CompletedStatus TripStatus = "completed"
 )
 
+const reasonOutOfRange = "is out of range"
+
 type Point struct {
 	Latitude  float64
 	Longitude float64
@@ -49,16 +51,16 @@ func (t Trip) ValidateCreate() error {
 		return &ValidationError{Field: "driver_id", Reason: "must not be empty"}
 	}
 	if t.StartPoint.Latitude < -90 || t.StartPoint.Latitude > 90 {
-		return &ValidationError{Field: "start_point.latitude", Reason: "is out of range"}
+		return &ValidationError{Field: "start_point.latitude", Reason: reasonOutOfRange}
 	}
 	if t.StartPoint.Longitude < -180 || t.StartPoint.Longitude > 180 {
-		return &ValidationError{Field: "start_point.longitude", Reason: "is out of range"}
+		return &ValidationError{Field: "start_point.longitude", Reason: reasonOutOfRange}
 	}
 	if t.EndPoint.Latitude < -90 || t.EndPoint.Latitude > 90 {
-		return &ValidationError{Field: "end_point.latitude", Reason: "is out of range"}
+		return &ValidationError{Field: "end_point.latitude", Reason: reasonOutOfRange}
 	}
 	if t.EndPoint.Longitude < -180 || t.EndPoint.Longitude > 180 {
-		return &ValidationError{Field: "end_point.longitude", Reason: "is out of range"}
+		return &ValidationError{Field: "end_point.longitude", Reason: reasonOutOfRange}
 	}
 	if t.Price < 0 {
 		return &ValidationError{Field: "price", Reason: "must not be negative"}

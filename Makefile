@@ -1,5 +1,5 @@
 .PHONY: generate run test test-integration test-race start stop status connect \
-	migrate migrate-down migrate-down-all migrate-status
+	migrate migrate-down migrate-down-all migrate-status lint
 
 generate:
 	mkdir -p internal/generated
@@ -44,3 +44,6 @@ migrate-down-all:
 
 migrate-status:
 	set -a; . ./.env; set +a; go tool goose -dir migrations postgres "$$DATABASE_URL" status
+
+lint:
+	golangci-lint run ./...

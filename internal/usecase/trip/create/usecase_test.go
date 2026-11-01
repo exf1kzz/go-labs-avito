@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"go.uber.org/mock/gomock"
+
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	"github.com/exf1kzz/go-labs-avito/internal/model"
 	createuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/create"
-	"github.com/google/uuid"
-	"go.uber.org/mock/gomock"
 )
 
 func TestExecuteSuccess(t *testing.T) {
@@ -49,7 +50,8 @@ func TestExecuteSuccess(t *testing.T) {
 			ctx, gomock.Any(), nil, domaintrip.ActiveStatus, nil, gomock.Any(),
 		).DoAndReturn(
 			func(_ context.Context, id uuid.UUID, _ *domaintrip.TripStatus,
-				_ domaintrip.TripStatus, _ *string, at time.Time) error {
+				_ domaintrip.TripStatus, _ *string, at time.Time,
+			) error {
 				if id != saved.ID || !at.Equal(saved.StartedAt) {
 					t.Errorf("history does not match saved trip")
 				}

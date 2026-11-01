@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/exf1kzz/go-labs-avito/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/exf1kzz/go-labs-avito/internal/config"
 )
 
 func NewPool(

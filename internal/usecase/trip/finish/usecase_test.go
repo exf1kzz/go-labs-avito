@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
-	finishuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/finish"
 	"github.com/google/uuid"
 	"go.uber.org/mock/gomock"
+
+	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
+	finishuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/finish"
 )
 
 func TestExecuteSuccess(t *testing.T) {
@@ -42,7 +43,8 @@ func TestExecuteSuccess(t *testing.T) {
 			ctx, id, gomock.Any(), domaintrip.CompletedStatus, nil, gomock.Any(),
 		).DoAndReturn(
 			func(_ context.Context, _ uuid.UUID, from *domaintrip.TripStatus,
-				_ domaintrip.TripStatus, _ *string, at time.Time) error {
+				_ domaintrip.TripStatus, _ *string, at time.Time,
+			) error {
 				if from == nil || *from != domaintrip.ActiveStatus || !at.Equal(finishedAt) {
 					t.Errorf("history transition or time is incorrect")
 				}

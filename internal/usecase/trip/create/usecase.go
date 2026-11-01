@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	"github.com/exf1kzz/go-labs-avito/internal/model"
-	"github.com/google/uuid"
 )
 
 type Usecase struct {

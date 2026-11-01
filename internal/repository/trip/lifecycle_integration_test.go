@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/postgres/transaction"
 	triprepo "github.com/exf1kzz/go-labs-avito/internal/repository/trip"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func setupRepository(t *testing.T) (context.Context, *pgxpool.Pool, *triprepo.TripRepository) {

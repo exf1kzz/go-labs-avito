@@ -10,12 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"go.uber.org/mock/gomock"
+
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	api "github.com/exf1kzz/go-labs-avito/internal/generated"
 	createhttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/create"
 	"github.com/exf1kzz/go-labs-avito/internal/model"
-	"github.com/google/uuid"
-	"go.uber.org/mock/gomock"
 )
 
 func TestCreateTrip(t *testing.T) {
@@ -32,11 +33,11 @@ func TestCreateTrip(t *testing.T) {
 	dbErr := errors.New("secret database detail")
 
 	tests := []struct {
-		name       string
-		body       string
-		usecaseErr error
-		wantStatus int
-		wantCode   string
+		name        string
+		body        string
+		usecaseErr  error
+		wantStatus  int
+		wantCode    string
 		callUsecase bool
 	}{
 		{"success", validBody, nil, http.StatusCreated, "", true},
@@ -59,7 +60,7 @@ func TestCreateTrip(t *testing.T) {
 
 						return domaintrip.Trip{
 							ID: tripID, UserID: userID, DriverID: driverID,
-							Status: domaintrip.ActiveStatus,
+							Status:    domaintrip.ActiveStatus,
 							StartedAt: time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC),
 						}, tt.usecaseErr
 					},

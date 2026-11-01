@@ -15,6 +15,12 @@ import (
 )
 
 func main() {
+	if err := runWithSignal(); err != nil {
+		log.Fatalf("run service: %v", err)
+	}
+}
+
+func runWithSignal() error {
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
@@ -22,9 +28,7 @@ func main() {
 	)
 	defer stop()
 
-	if err := run(ctx); err != nil {
-		log.Fatalf("run service: %v", err)
-	}
+	return run(ctx)
 }
 
 func run(ctx context.Context) error {

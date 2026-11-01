@@ -3,9 +3,10 @@ package transport
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	api "github.com/exf1kzz/go-labs-avito/internal/generated"
 	"github.com/exf1kzz/go-labs-avito/internal/http/domainerror"
-	"github.com/go-chi/chi/v5"
 )
 
 func New(h api.ServerInterface) http.Handler {

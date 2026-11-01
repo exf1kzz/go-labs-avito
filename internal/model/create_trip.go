@@ -1,8 +1,9 @@
 package model
 
 import (
-	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	"github.com/google/uuid"
+
+	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 )
 
 type CreateTripInput struct {

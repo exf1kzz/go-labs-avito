@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"go.uber.org/mock/gomock"
+
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	api "github.com/exf1kzz/go-labs-avito/internal/generated"
 	finishhttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/finish"
-	"github.com/google/uuid"
-	"go.uber.org/mock/gomock"
 )
 
 func TestFinishTrip(t *testing.T) {
@@ -35,7 +36,8 @@ func TestFinishTrip(t *testing.T) {
 			uc.EXPECT().Execute(gomock.Any(), id).Return(
 				domaintrip.Trip{
 					ID: id, Status: domaintrip.CompletedStatus, FinishedAt: &at,
-				}, tt.err)
+				}, tt.err,
+			)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/trips/"+id.String()+"/finish", nil)
 			rec := httptest.NewRecorder()

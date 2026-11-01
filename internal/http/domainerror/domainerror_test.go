@@ -29,7 +29,7 @@ func TestProblem(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			status, body := domainerror.Problem(fmt.Errorf("wrapped: %w", tt.err))
 
-			if status != tt.wantStatus || body.Status != int32(tt.wantStatus) {
+			if status != tt.wantStatus || int(body.Status) != tt.wantStatus {
 				t.Errorf("status = %d, body status = %d, want %d", status, body.Status, tt.wantStatus)
 			}
 			if body.Code != tt.wantCode {
