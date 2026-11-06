@@ -19,8 +19,6 @@ func NewLogger(level string) *slog.Logger {
 		minLevel = slog.LevelInfo
 	}
 
-	return slog.New(slog.NewJSONHandler(
-		os.Stdout,
-		&slog.HandlerOptions{Level: minLevel},
-	)).With("service", "trip-service")
+	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: minLevel})
+	return slog.New(&traceHandler{Handler: handler}).With("service", "trip-service")
 }

@@ -8,12 +8,26 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/trace/noop"
+
 	api "github.com/exf1kzz/go-labs-avito/internal/generated"
 	transport "github.com/exf1kzz/go-labs-avito/internal/http"
 )
 
 func TestInvalidTripID(t *testing.T) {
-	router := transport.New(api.Unimplemented{}, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	cnt, err := metricnoop.NewMeterProvider().Meter("test").Int64UpDownCounter("http.server.active_requests")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	router := transport.New(
+		api.Unimplemented{},
+		slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		noop.NewTracerProvider(),
+		metricnoop.NewMeterProvider(),
+		cnt,
+	)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/trips/not-a-uuid", nil)
 	rec := httptest.NewRecorder()
 

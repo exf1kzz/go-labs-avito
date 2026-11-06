@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
@@ -25,7 +24,7 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			route := chi.RouteContext(r.Context()).RoutePattern()
 			if route == "" {
-				route = "<unmatched>"
+				route = unmatchedRoute
 			}
 
 			attrs := []any{
@@ -33,11 +32,6 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 				"route", route,
 				"status", status,
 				"duration_ms", time.Since(start).Milliseconds(),
-			}
-
-			span := trace.SpanContextFromContext(r.Context())
-			if span.IsValid() {
-				attrs = append(attrs, "trace_id", span.TraceID().String(), "span_id", span.SpanID().String())
 			}
 
 			if status >= http.StatusInternalServerError {

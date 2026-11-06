@@ -41,7 +41,15 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build container: %w", err)
 	}
-	defer app.Close()
+
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		defer cancel()
+
+		if err := app.Close(closeCtx); err != nil {
+			app.Logger.Error("close application", "error", err)
+		}
+	}()
 
 	server := &http.Server{
 		Addr:              cfg.HTTP.Address,

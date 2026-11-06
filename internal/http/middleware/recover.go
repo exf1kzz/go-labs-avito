@@ -21,7 +21,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 				if value := recover(); value != nil {
 					route := chi.RouteContext(r.Context()).RoutePattern()
 					if route == "" {
-						route = "<unmatched>"
+						route = unmatchedRoute
 					}
 
 					logger.ErrorContext(r.Context(), "request handled",

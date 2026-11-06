@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/otel/metric"
+
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
 	api "github.com/exf1kzz/go-labs-avito/internal/generated"
 	"github.com/exf1kzz/go-labs-avito/internal/http/domainerror"
@@ -17,13 +19,20 @@ type Handler struct {
 	usecase      usecase
 	queryTimeout time.Duration
 	logger       *slog.Logger
+	created      metric.Int64Counter
 }
 
-func New(usecase usecase, queryTimeout time.Duration, logger *slog.Logger) *Handler {
+func New(
+	usecase usecase,
+	queryTimeout time.Duration,
+	logger *slog.Logger,
+	created metric.Int64Counter,
+) *Handler {
 	return &Handler{
 		usecase:      usecase,
 		queryTimeout: queryTimeout,
 		logger:       logger,
+		created:      created,
 	}
 }
 
@@ -58,6 +67,9 @@ func (h *Handler) CreateTrip(
 		domainerror.Write(h.logger, w, r, err)
 		return
 	}
+
+	h.created.Add(ctx, 1)
+	h.logger.InfoContext(ctx, "trip created", "trip_id", trip.ID.String())
 
 	w.Header().Set("Location", "/api/v1/trips/"+trip.ID.String())
 	w.Header().Set("Content-Type", "application/json")

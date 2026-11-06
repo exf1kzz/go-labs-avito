@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"go.uber.org/mock/gomock"
 
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
@@ -73,7 +74,12 @@ func TestCreateTrip(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 
-			createhttp.New(uc, time.Second, slog.New(slog.NewJSONHandler(io.Discard, nil))).CreateTrip(rec, req, api.CreateTripParams{})
+			counter, err := metricnoop.NewMeterProvider().Meter("test").Int64Counter("tripgo.trips.created")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			createhttp.New(uc, time.Second, slog.New(slog.NewJSONHandler(io.Discard, nil)), counter).CreateTrip(rec, req, api.CreateTripParams{})
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())
