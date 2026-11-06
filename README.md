@@ -230,4 +230,4 @@ make test
 make test-integration
 ```
 
-Для `make test-intergration` нужна работающая PostgreSQL с примененными миграциями.
+Для `make test-integration` нужна работающая PostgreSQL с примененными миграциями.
