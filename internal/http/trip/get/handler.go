@@ -3,6 +3,7 @@ package get
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -13,10 +14,15 @@ import (
 type Handler struct {
 	usecase      usecase
 	queryTimeout time.Duration
+	logger       *slog.Logger
 }
 
-func New(usecase usecase, queryTimeout time.Duration) *Handler {
-	return &Handler{usecase: usecase, queryTimeout: queryTimeout}
+func New(usecase usecase, queryTimeout time.Duration, logger *slog.Logger) *Handler {
+	return &Handler{
+		usecase:      usecase,
+		queryTimeout: queryTimeout,
+		logger:       logger,
+	}
 }
 
 func (h *Handler) GetTrip(
@@ -29,7 +35,7 @@ func (h *Handler) GetTrip(
 
 	trip, err := h.usecase.Execute(ctx, tripID)
 	if err != nil {
-		domainerror.Write(w, r, err)
+		domainerror.Write(h.logger, w, r, err)
 		return
 	}
 

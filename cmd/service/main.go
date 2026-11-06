@@ -52,7 +52,7 @@ func run(ctx context.Context) error {
 		IdleTimeout:       cfg.HTTP.IdleTimeout,
 	}
 
-	log.Printf("HTTP server listening on: %s", server.Addr)
+	app.Logger.Info("HTTP server listening", "address", server.Addr)
 
 	serverErrors := make(chan error, 1)
 
@@ -68,7 +68,7 @@ func run(ctx context.Context) error {
 
 		return nil
 	case <-ctx.Done():
-		log.Printf("shutdown signal received")
+		app.Logger.Info("shutdown signal received")
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(
@@ -78,7 +78,7 @@ func run(ctx context.Context) error {
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("graceful HTTP shutdown failed: %v", err)
+		app.Logger.Error("graceful HTTP shutdown failed", "error", err)
 
 		if closeErr := server.Close(); closeErr != nil {
 			return fmt.Errorf("force close HTTP server: %w", closeErr)
@@ -91,7 +91,7 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("serve HTTP during shutdown: %w", err)
 	}
 
-	log.Printf("HTTP server stopped")
+	app.Logger.Info("HTTP server stopped")
 
 	return nil
 }

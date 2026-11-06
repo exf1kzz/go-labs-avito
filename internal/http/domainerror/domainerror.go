@@ -27,9 +27,18 @@ func Problem(err error) (int, api.Problem) {
 		return problem(http.StatusNotFound, "trip-not-found", "Trip not found",
 			"Trip was not found", "trip_not_found")
 	default:
-		return problem(http.StatusInternalServerError, "internal-error",
-			"Internal Server Error", "Internal server error", "internal_error")
+		return internalProblem()
 	}
+}
+
+func internalProblem() (int, api.Problem) {
+	return problem(http.StatusInternalServerError, "internal-error",
+		"Internal Server Error", "Internal server error", "internal_error")
+}
+
+func WriteInternal(w http.ResponseWriter, r *http.Request) {
+	status, body := internalProblem()
+	write(w, r, status, body)
 }
 
 func problem(status int32, slug, title, detail, code string) (int, api.Problem) {
@@ -42,12 +51,11 @@ func problem(status int32, slug, title, detail, code string) (int, api.Problem) 
 	}
 }
 
-func Write(w http.ResponseWriter, r *http.Request, err error) {
+func Write(logger *slog.Logger, w http.ResponseWriter, r *http.Request, err error) {
 	status, body := Problem(err)
 	if status == http.StatusInternalServerError {
-		slog.Error("internal request error",
+		logger.ErrorContext(r.Context(), "internal request error",
 			"method", r.Method,
-			"path", r.URL.Path,
 			"error", err,
 		)
 	}

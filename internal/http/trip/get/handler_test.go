@@ -3,6 +3,8 @@ package get_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,7 +38,7 @@ func TestGetTrip(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/trips/"+id.String(), nil)
 			rec := httptest.NewRecorder()
-			gethttp.New(uc, time.Second).GetTrip(rec, req, id)
+			gethttp.New(uc, time.Second, slog.New(slog.NewJSONHandler(io.Discard, nil))).GetTrip(rec, req, id)
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())

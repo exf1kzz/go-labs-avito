@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,6 +15,7 @@ import (
 	gethttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/get"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/postgres"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/postgres/transaction"
+	"github.com/exf1kzz/go-labs-avito/internal/infra/telemetry"
 	triprepo "github.com/exf1kzz/go-labs-avito/internal/repository/trip"
 	createuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/create"
 	finishuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/finish"
@@ -23,6 +25,7 @@ import (
 type Container struct {
 	Handler http.Handler
 	pool    *pgxpool.Pool
+	Logger  *slog.Logger
 }
 
 func New(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -34,18 +37,21 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 	txManager := transaction.NewTransactionManager(pool)
 	tripRepository := triprepo.NewTripRepository(txManager)
 
+	logger := telemetry.NewLogger(cfg.LogLevel)
+
 	timeout := cfg.Database.QueryTimeout
 	tripHandler := transport.NewServer(
 		pool,
-		createhttp.New(createuc.New(tripRepository, txManager), timeout),
-		gethttp.New(getuc.New(tripRepository), timeout),
-		finishhttp.New(finishuc.New(tripRepository, txManager), timeout),
+		createhttp.New(createuc.New(tripRepository, txManager), timeout, logger),
+		gethttp.New(getuc.New(tripRepository), timeout, logger),
+		finishhttp.New(finishuc.New(tripRepository, txManager), timeout, logger),
 		timeout,
 	)
 
 	return &Container{
-		Handler: transport.New(tripHandler),
+		Handler: transport.New(tripHandler, logger),
 		pool:    pool,
+		Logger:  logger,
 	}, nil
 }
 

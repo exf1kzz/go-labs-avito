@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -71,7 +73,7 @@ func TestCreateTrip(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 
-			createhttp.New(uc, time.Second).CreateTrip(rec, req, api.CreateTripParams{})
+			createhttp.New(uc, time.Second, slog.New(slog.NewJSONHandler(io.Discard, nil))).CreateTrip(rec, req, api.CreateTripParams{})
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())

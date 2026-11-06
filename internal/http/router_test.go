@@ -2,6 +2,8 @@ package transport_test
 
 import (
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +13,7 @@ import (
 )
 
 func TestInvalidTripID(t *testing.T) {
-	router := transport.New(api.Unimplemented{})
+	router := transport.New(api.Unimplemented{}, slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/trips/not-a-uuid", nil)
 	rec := httptest.NewRecorder()
 

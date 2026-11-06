@@ -3,6 +3,8 @@ package finish_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -41,7 +43,7 @@ func TestFinishTrip(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/trips/"+id.String()+"/finish", nil)
 			rec := httptest.NewRecorder()
-			finishhttp.New(uc, time.Second).FinishTrip(rec, req, id)
+			finishhttp.New(uc, time.Second, slog.New(slog.NewJSONHandler(io.Discard, nil))).FinishTrip(rec, req, id)
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())
