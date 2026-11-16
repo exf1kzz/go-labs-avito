@@ -24,23 +24,38 @@ func TestFinishTrip(t *testing.T) {
 	at := time.Now()
 	tests := []struct {
 		name       string
-		err        error
+		setup      func(*testing.T) *Mockusecase
 		wantStatus int
 		wantCode   string
 	}{
-		{"completed", nil, http.StatusOK, ""},
-		{"already completed", fmt.Errorf("finish: %w", domaintrip.ErrTripCompleted), http.StatusConflict, "trip_completed"},
+		{
+			name: "completed",
+			setup: func(t *testing.T) *Mockusecase {
+				uc := NewMockusecase(gomock.NewController(t))
+				uc.EXPECT().Execute(gomock.Any(), id).
+					Return(domaintrip.Trip{
+						ID: id, Status: domaintrip.CompletedStatus, FinishedAt: &at,
+					}, nil)
+				return uc
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "already completed",
+			setup: func(t *testing.T) *Mockusecase {
+				uc := NewMockusecase(gomock.NewController(t))
+				uc.EXPECT().Execute(gomock.Any(), id).
+					Return(domaintrip.Trip{}, fmt.Errorf("finish: %w", domaintrip.ErrTripCompleted))
+				return uc
+			},
+			wantStatus: http.StatusConflict,
+			wantCode:   "trip_completed",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			uc := NewMockusecase(ctrl)
-			uc.EXPECT().Execute(gomock.Any(), id).Return(
-				domaintrip.Trip{
-					ID: id, Status: domaintrip.CompletedStatus, FinishedAt: &at,
-				}, tt.err,
-			)
+			uc := tt.setup(t)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/trips/"+id.String()+"/finish", nil)
 			rec := httptest.NewRecorder()
@@ -55,7 +70,7 @@ func TestFinishTrip(t *testing.T) {
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())
 			}
-			if tt.err == nil {
+			if tt.wantStatus == http.StatusOK {
 				var body struct {
 					ID     uuid.UUID `json:"id"`
 					Status string    `json:"status"`

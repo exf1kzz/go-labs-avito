@@ -22,19 +22,36 @@ func TestGetTrip(t *testing.T) {
 	id := uuid.New()
 	tests := []struct {
 		name       string
-		err        error
+		setup      func(*testing.T) *Mockusecase
 		wantStatus int
 		wantCode   string
 	}{
-		{"found", nil, http.StatusOK, ""},
-		{"not found", fmt.Errorf("get: %w", domaintrip.ErrTripNotFound), http.StatusNotFound, "trip_not_found"},
+		{
+			name: "found",
+			setup: func(t *testing.T) *Mockusecase {
+				uc := NewMockusecase(gomock.NewController(t))
+				uc.EXPECT().Execute(gomock.Any(), id).
+					Return(domaintrip.Trip{ID: id, Status: domaintrip.ActiveStatus}, nil)
+				return uc
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "not found",
+			setup: func(t *testing.T) *Mockusecase {
+				uc := NewMockusecase(gomock.NewController(t))
+				uc.EXPECT().Execute(gomock.Any(), id).
+					Return(domaintrip.Trip{}, fmt.Errorf("get: %w", domaintrip.ErrTripNotFound))
+				return uc
+			},
+			wantStatus: http.StatusNotFound,
+			wantCode:   "trip_not_found",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			uc := NewMockusecase(ctrl)
-			uc.EXPECT().Execute(gomock.Any(), id).Return(domaintrip.Trip{ID: id, Status: domaintrip.ActiveStatus}, tt.err)
+			uc := tt.setup(t)
 
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/trips/"+id.String(), nil)
 			rec := httptest.NewRecorder()
@@ -43,7 +60,7 @@ func TestGetTrip(t *testing.T) {
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())
 			}
-			if tt.err == nil {
+			if tt.wantStatus == http.StatusOK {
 				var body struct {
 					ID uuid.UUID `json:"id"`
 				}

@@ -35,14 +35,9 @@ func TestExecuteSuccess(t *testing.T) {
 
 	var saved domaintrip.Trip
 	gomock.InOrder(
-		repo.EXPECT().Create(ctx, gomock.Any()).DoAndReturn(
+		repo.EXPECT().Create(ctx, createTripMatcher(input)).DoAndReturn(
 			func(_ context.Context, trip domaintrip.Trip) error {
 				saved = trip
-				if trip.ID == uuid.Nil || trip.UserID != input.UserID ||
-					trip.DriverID != input.DriverID || trip.Price != input.Price ||
-					trip.Status != domaintrip.ActiveStatus {
-					t.Errorf("saved trip has wrong fields: %+v", trip)
-				}
 				return nil
 			},
 		),
@@ -64,8 +59,8 @@ func TestExecuteSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if got.ID != saved.ID {
-		t.Errorf("returned ID = %s, saved ID = %s", got.ID, saved.ID)
+	if got != saved {
+		t.Errorf("returned trip = %+v, saved trip = %+v", got, saved)
 	}
 }
 
@@ -75,18 +70,20 @@ func TestExecuteDriverBusy(t *testing.T) {
 	repo := NewMocktripRepository(ctrl)
 	tx := NewMocktxManager(ctrl)
 
+	input := model.CreateTripInput{
+		UserID:   uuid.New(),
+		DriverID: uuid.New(),
+		Price:    100,
+	}
+
 	tx.EXPECT().Do(ctx, gomock.Any()).DoAndReturn(
 		func(ctx context.Context, fn func(context.Context) error) error {
 			return fn(ctx)
 		},
 	)
-	repo.EXPECT().Create(ctx, gomock.Any()).Return(domaintrip.ErrDriverBusy)
+	repo.EXPECT().Create(ctx, createTripMatcher(input)).Return(domaintrip.ErrDriverBusy)
 
-	got, err := createuc.New(repo, tx).Execute(ctx, model.CreateTripInput{
-		UserID:   uuid.New(),
-		DriverID: uuid.New(),
-		Price:    100,
-	})
+	got, err := createuc.New(repo, tx).Execute(ctx, input)
 	if !errors.Is(err, domaintrip.ErrDriverBusy) {
 		t.Fatalf("Execute() error = %v, want ErrDriverBusy", err)
 	}
@@ -111,4 +108,26 @@ func TestExecuteInvalidInput(t *testing.T) {
 	if got != (domaintrip.Trip{}) {
 		t.Errorf("trip on error = %+v, want zero value", got)
 	}
+}
+
+func createTripMatcher(input model.CreateTripInput) gomock.Matcher {
+	expected := domaintrip.Trip{
+		UserID:     input.UserID,
+		DriverID:   input.DriverID,
+		StartPoint: input.StartPoint,
+		EndPoint:   input.EndPoint,
+		Price:      input.Price,
+		Status:     domaintrip.ActiveStatus,
+	}
+
+	return gomock.Cond(func(got domaintrip.Trip) bool {
+		if got.ID == uuid.Nil || got.StartedAt.IsZero() ||
+			got.StartedAt.Location() != time.UTC {
+			return false
+		}
+
+		got.ID = uuid.Nil
+		got.StartedAt = time.Time{}
+		return got == expected
+	})
 }

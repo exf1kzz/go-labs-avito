@@ -1,7 +1,6 @@
 package create_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -35,41 +34,87 @@ func TestCreateTrip(t *testing.T) {
 	}`
 	dbErr := errors.New("secret database detail")
 
+	wantInput := model.CreateTripInput{
+		UserID:   userID,
+		DriverID: driverID,
+		StartPoint: domaintrip.Point{
+			Latitude:  55.75,
+			Longitude: 37.61,
+		},
+		EndPoint: domaintrip.Point{
+			Latitude:  55.76,
+			Longitude: 37.62,
+		},
+		Price: 100,
+	}
+
+	createdTrip := domaintrip.Trip{
+		ID:        tripID,
+		UserID:    userID,
+		DriverID:  driverID,
+		Status:    domaintrip.ActiveStatus,
+		StartedAt: time.Now().UTC(),
+	}
+
 	tests := []struct {
-		name        string
-		body        string
-		usecaseErr  error
-		wantStatus  int
-		wantCode    string
-		callUsecase bool
+		name       string
+		body       string
+		setup      func(*testing.T) *Mockusecase
+		wantStatus int
+		wantCode   string
 	}{
-		{"success", validBody, nil, http.StatusCreated, "", true},
-		{"invalid body", `{`, nil, http.StatusBadRequest, "invalid_request", false},
-		{"driver busy", validBody, domaintrip.ErrDriverBusy, http.StatusConflict, "driver_busy", true},
-		{"repository error", validBody, dbErr, http.StatusInternalServerError, "internal_error", true},
+		{
+			name: "success",
+			body: validBody,
+			setup: func(t *testing.T) *Mockusecase {
+				uc := NewMockusecase(gomock.NewController(t))
+				uc.EXPECT().
+					Execute(gomock.Any(), gomock.Eq(wantInput)).
+					Return(createdTrip, nil)
+				return uc
+			},
+			wantStatus: http.StatusCreated,
+		},
+		{
+			name: "invalid body",
+			body: `{`,
+			setup: func(t *testing.T) *Mockusecase {
+				return NewMockusecase(gomock.NewController(t))
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "invalid_request",
+		},
+		{
+			name: "driver busy",
+			body: validBody,
+			setup: func(t *testing.T) *Mockusecase {
+				uc := NewMockusecase(gomock.NewController(t))
+				uc.EXPECT().
+					Execute(gomock.Any(), gomock.Eq(wantInput)).
+					Return(domaintrip.Trip{}, domaintrip.ErrDriverBusy)
+				return uc
+			},
+			wantStatus: http.StatusConflict,
+			wantCode:   "driver_busy",
+		},
+		{
+			name: "repository error",
+			body: validBody,
+			setup: func(t *testing.T) *Mockusecase {
+				uc := NewMockusecase(gomock.NewController(t))
+				uc.EXPECT().
+					Execute(gomock.Any(), gomock.Eq(wantInput)).
+					Return(domaintrip.Trip{}, dbErr)
+				return uc
+			},
+			wantStatus: http.StatusInternalServerError,
+			wantCode:   "internal_error",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			uc := NewMockusecase(ctrl)
-			if tt.callUsecase {
-				uc.EXPECT().Execute(gomock.Any(), gomock.Any()).DoAndReturn(
-					func(_ context.Context, input model.CreateTripInput) (domaintrip.Trip, error) {
-						if input.UserID != userID || input.DriverID != driverID ||
-							input.Price != 100 || input.StartPoint.Latitude != 55.75 {
-							t.Errorf("wrong usecase input: %+v", input)
-						}
-
-						return domaintrip.Trip{
-							ID: tripID, UserID: userID, DriverID: driverID,
-							Status:    domaintrip.ActiveStatus,
-							StartedAt: time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC),
-						}, tt.usecaseErr
-					},
-				)
-			}
-
+			uc := tt.setup(t)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/trips", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()

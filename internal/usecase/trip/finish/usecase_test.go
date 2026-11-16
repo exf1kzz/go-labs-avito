@@ -30,7 +30,13 @@ func TestExecuteSuccess(t *testing.T) {
 	var finishedAt time.Time
 	gomock.InOrder(
 		repo.EXPECT().GetByID(ctx, id).Return(current, nil),
-		repo.EXPECT().Finish(ctx, id, gomock.Any()).DoAndReturn(
+		repo.EXPECT().Finish(
+			ctx,
+			id,
+			gomock.Cond(func(at time.Time) bool {
+				return !at.IsZero() && at.Location() == time.UTC
+			}),
+		).DoAndReturn(
 			func(_ context.Context, _ uuid.UUID, at time.Time) (domaintrip.Trip, error) {
 				finishedAt = at
 				updated := current
@@ -40,17 +46,17 @@ func TestExecuteSuccess(t *testing.T) {
 			},
 		),
 		repo.EXPECT().AddStatusHistory(
-			ctx, id, gomock.Any(), domaintrip.CompletedStatus, nil, gomock.Any(),
-		).DoAndReturn(
-			func(_ context.Context, _ uuid.UUID, from *domaintrip.TripStatus,
-				_ domaintrip.TripStatus, _ *string, at time.Time,
-			) error {
-				if from == nil || *from != domaintrip.ActiveStatus || !at.Equal(finishedAt) {
-					t.Errorf("history transition or time is incorrect")
-				}
-				return nil
-			},
-		),
+			ctx,
+			id,
+			gomock.Cond(func(from *domaintrip.TripStatus) bool {
+				return from != nil && *from == domaintrip.ActiveStatus
+			}),
+			domaintrip.CompletedStatus,
+			nil,
+			gomock.Cond(func(at time.Time) bool {
+				return at.Equal(finishedAt)
+			}),
+		).Return(nil),
 	)
 
 	got, err := finishuc.New(repo, tx).Execute(ctx, id)

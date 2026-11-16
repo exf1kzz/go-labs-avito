@@ -27,6 +27,9 @@ func Tracing(
 
 	return func(next http.Handler) http.Handler {
 		return instrument(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if slot, ok := r.Context().Value(panicSpanContextKey{}).(*panicSpanContext); ok {
+				slot.value = trace.SpanContextFromContext(r.Context())
+			}
 			next.ServeHTTP(w, r)
 
 			route := chi.RouteContext(r.Context()).RoutePattern()

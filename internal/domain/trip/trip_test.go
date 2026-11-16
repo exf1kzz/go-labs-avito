@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTripFinish(t *testing.T) {
@@ -37,17 +38,12 @@ func TestTripFinish(t *testing.T) {
 			trip := Trip{Status: tt.initialStatus}
 
 			err := trip.Finish(at)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("Finish() error = %v, want %v", err, tt.wantErr)
-			}
-			if trip.Status != tt.wantStatus {
-				t.Errorf("status = %q, want %q", trip.Status, tt.wantStatus)
-			}
-			if (trip.FinishedAt != nil) != tt.wantFinishedAt {
-				t.Fatalf("FinishedAt present = %t, want %t", trip.FinishedAt != nil, tt.wantFinishedAt)
-			}
-			if tt.wantFinishedAt && !trip.FinishedAt.Equal(at) {
-				t.Errorf("FinishedAt = %v, want %v", trip.FinishedAt, at)
+
+			assert.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, tt.wantStatus, trip.Status)
+
+			if assert.Equal(t, tt.wantFinishedAt, trip.FinishedAt != nil) && tt.wantFinishedAt {
+				assert.True(t, trip.FinishedAt.Equal(at))
 			}
 		})
 	}
@@ -75,6 +71,11 @@ func TestValidateCreate(t *testing.T) {
 		{"end latitude", func(t *Trip) { t.EndPoint.Latitude = -91 }, "end_point.latitude"},
 		{"end longitude", func(t *Trip) { t.EndPoint.Longitude = -181 }, "end_point.longitude"},
 		{"negative price", func(t *Trip) { t.Price = -1 }, "price"},
+		{"zero coordinates and price", func(t *Trip) {
+			t.StartPoint = Point{}
+			t.EndPoint = Point{}
+			t.Price = 0
+		}, ""},
 	}
 
 	for _, tt := range tests {
