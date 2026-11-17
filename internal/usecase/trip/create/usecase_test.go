@@ -2,11 +2,11 @@ package create_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
@@ -14,100 +14,146 @@ import (
 	createuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/create"
 )
 
-func TestExecuteSuccess(t *testing.T) {
+func TestExecute(t *testing.T) {
 	ctx := context.Background()
 	input := model.CreateTripInput{
-		UserID:     uuid.New(),
-		DriverID:   uuid.New(),
+		UserID:     uuid.MustParse("00000000-0000-4000-8000-000000000001"),
+		DriverID:   uuid.MustParse("00000000-0000-4000-8000-000000000002"),
 		StartPoint: domaintrip.Point{Latitude: 55.75, Longitude: 37.61},
 		EndPoint:   domaintrip.Point{Latitude: 55.76, Longitude: 37.62},
 		Price:      100,
 	}
+	expectedTrip := domaintrip.Trip{
+		UserID:     input.UserID,
+		DriverID:   input.DriverID,
+		StartPoint: input.StartPoint,
+		EndPoint:   input.EndPoint,
+		Price:      input.Price,
+		Status:     domaintrip.ActiveStatus,
+	}
 
-	ctrl := gomock.NewController(t)
-	repo := NewMocktripRepository(ctrl)
-	tx := NewMocktxManager(ctrl)
-	tx.EXPECT().Do(ctx, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	)
+	tests := []struct {
+		name    string
+		setup   func(*gomock.Controller) *createuc.Usecase
+		in      model.CreateTripInput
+		want    domaintrip.Trip
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "trip created",
+			setup: func(ctrl *gomock.Controller) *createuc.Usecase {
+				repo := NewMocktripRepository(ctrl)
+				tx := NewMocktxManager(ctrl)
+				expectTransaction(tx, ctx)
 
-	var saved domaintrip.Trip
-	gomock.InOrder(
-		repo.EXPECT().Create(ctx, createTripMatcher(input)).DoAndReturn(
-			func(_ context.Context, trip domaintrip.Trip) error {
-				saved = trip
-				return nil
+				var saved domaintrip.Trip
+				gomock.InOrder(
+					repo.EXPECT().
+						Create(ctx, createTripMatcher(input)).
+						DoAndReturn(func(_ context.Context, trip domaintrip.Trip) error {
+							saved = trip
+							return nil
+						}),
+					repo.EXPECT().AddStatusHistory(
+						ctx,
+						gomock.Cond(func(id uuid.UUID) bool {
+							return id == saved.ID
+						}),
+						nil,
+						domaintrip.ActiveStatus,
+						nil,
+						gomock.Cond(func(at time.Time) bool {
+							return at.Equal(saved.StartedAt)
+						}),
+					).Return(nil),
+				)
+
+				return createuc.New(repo, tx)
 			},
-		),
-		repo.EXPECT().AddStatusHistory(
-			ctx, gomock.Any(), nil, domaintrip.ActiveStatus, nil, gomock.Any(),
-		).DoAndReturn(
-			func(_ context.Context, id uuid.UUID, _ *domaintrip.TripStatus,
-				_ domaintrip.TripStatus, _ *string, at time.Time,
-			) error {
-				if id != saved.ID || !at.Equal(saved.StartedAt) {
-					t.Errorf("history does not match saved trip")
+			in:      input,
+			want:    expectedTrip,
+			wantErr: assert.NoError,
+		},
+		{
+			name: "driver busy",
+			setup: func(ctrl *gomock.Controller) *createuc.Usecase {
+				repo := NewMocktripRepository(ctrl)
+				tx := NewMocktxManager(ctrl)
+				expectTransaction(tx, ctx)
+
+				repo.EXPECT().Create(ctx, createTripMatcher(input)).Return(domaintrip.ErrDriverBusy)
+
+				return createuc.New(repo, tx)
+			},
+			in:   input,
+			want: domaintrip.Trip{},
+			wantErr: func(t assert.TestingT, err error, msgAndArgs ...any) bool {
+				return assert.ErrorIs(t, err, domaintrip.ErrDriverBusy, msgAndArgs...)
+			},
+		},
+		{
+			name: "repository error",
+			setup: func(ctrl *gomock.Controller) *createuc.Usecase {
+				repo := NewMocktripRepository(ctrl)
+				tx := NewMocktxManager(ctrl)
+				expectTransaction(tx, ctx)
+
+				repo.EXPECT().Create(ctx, createTripMatcher(input)).Return(assert.AnError)
+
+				return createuc.New(repo, tx)
+			},
+			in:   input,
+			want: domaintrip.Trip{},
+			wantErr: func(t assert.TestingT, err error, msgAndArgs ...any) bool {
+				return assert.ErrorIs(t, err, assert.AnError, msgAndArgs...)
+			},
+		},
+		{
+			name: "invalid input",
+			setup: func(ctrl *gomock.Controller) *createuc.Usecase {
+				repo := NewMocktripRepository(ctrl)
+				tx := NewMocktxManager(ctrl)
+				return createuc.New(repo, tx)
+			},
+			in:   model.CreateTripInput{},
+			want: domaintrip.Trip{},
+			wantErr: func(t assert.TestingT, err error, msgAndArgs ...any) bool {
+				var validationErr *domaintrip.ValidationError
+				if !assert.ErrorAs(t, err, &validationErr, msgAndArgs...) {
+					return false
 				}
-				return nil
+				return assert.Equal(t, "user_id", validationErr.Field)
 			},
-		),
-	)
-
-	got, err := createuc.New(repo, tx).Execute(ctx, input)
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
+		},
 	}
-	if got != saved {
-		t.Errorf("returned trip = %+v, saved trip = %+v", got, saved)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			uc := tt.setup(ctrl)
+
+			got, err := uc.Execute(ctx, tt.in)
+
+			tt.wantErr(t, err)
+			if err == nil {
+				assert.NotEqual(t, uuid.Nil, got.ID)
+				assert.False(t, got.StartedAt.IsZero())
+				assert.Equal(t, time.UTC, got.StartedAt.Location())
+
+				got.ID = uuid.Nil
+				got.StartedAt = time.Time{}
+			}
+			assert.Equal(t, tt.want, got)
+		})
 	}
 }
 
-func TestExecuteDriverBusy(t *testing.T) {
-	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	repo := NewMocktripRepository(ctrl)
-	tx := NewMocktxManager(ctrl)
-
-	input := model.CreateTripInput{
-		UserID:   uuid.New(),
-		DriverID: uuid.New(),
-		Price:    100,
-	}
-
+func expectTransaction(tx *MocktxManager, ctx context.Context) {
 	tx.EXPECT().Do(ctx, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
+		func(txCtx context.Context, fn func(context.Context) error) error {
+			return fn(txCtx)
 		},
 	)
-	repo.EXPECT().Create(ctx, createTripMatcher(input)).Return(domaintrip.ErrDriverBusy)
-
-	got, err := createuc.New(repo, tx).Execute(ctx, input)
-	if !errors.Is(err, domaintrip.ErrDriverBusy) {
-		t.Fatalf("Execute() error = %v, want ErrDriverBusy", err)
-	}
-	if got != (domaintrip.Trip{}) {
-		t.Errorf("trip on error = %+v, want zero value", got)
-	}
-}
-
-func TestExecuteInvalidInput(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	repo := NewMocktripRepository(ctrl)
-	tx := NewMocktxManager(ctrl)
-
-	got, err := createuc.New(repo, tx).Execute(
-		context.Background(), model.CreateTripInput{},
-	)
-
-	var validationErr *domaintrip.ValidationError
-	if !errors.As(err, &validationErr) || validationErr.Field != "user_id" {
-		t.Fatalf("error = %v, want validation error for user_id", err)
-	}
-	if got != (domaintrip.Trip{}) {
-		t.Errorf("trip on error = %+v, want zero value", got)
-	}
 }
 
 func createTripMatcher(input model.CreateTripInput) gomock.Matcher {

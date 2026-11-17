@@ -2,6 +2,7 @@ package get_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
@@ -19,64 +22,105 @@ import (
 )
 
 func TestGetTrip(t *testing.T) {
-	id := uuid.New()
+	id := uuid.MustParse("00000000-0000-4000-8000-000000000001")
+	userID := uuid.MustParse("00000000-0000-4000-8000-000000000002")
+	driverID := uuid.MustParse("00000000-0000-4000-8000-000000000003")
+	startedAt := time.Now().UTC()
+	dbErr := errors.New("secret database detail")
+
+	foundTrip := domaintrip.Trip{
+		ID:         id,
+		UserID:     userID,
+		DriverID:   driverID,
+		StartPoint: domaintrip.Point{Latitude: 55.75, Longitude: 37.61},
+		EndPoint:   domaintrip.Point{Latitude: 55.76, Longitude: 37.62},
+		Price:      100,
+		Status:     domaintrip.ActiveStatus,
+		StartedAt:  startedAt,
+	}
+	expectedBody := api.Trip{
+		Id:         id,
+		UserId:     userID,
+		DriverId:   driverID,
+		StartPoint: api.Coordinates{Latitude: 55.75, Longitude: 37.61},
+		EndPoint:   api.Coordinates{Latitude: 55.76, Longitude: 37.62},
+		Price:      100,
+		Status:     api.TripStatus(domaintrip.ActiveStatus),
+		StartedAt:  startedAt,
+	}
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+
 	tests := []struct {
-		name       string
-		setup      func(*testing.T) *Mockusecase
-		wantStatus int
-		wantCode   string
+		name            string
+		setup           func(*gomock.Controller) *gethttp.Handler
+		in              uuid.UUID
+		wantStatus      int
+		wantContentType string
+		wantTrip        *api.Trip
+		wantProblemCode string
 	}{
 		{
 			name: "found",
-			setup: func(t *testing.T) *Mockusecase {
-				uc := NewMockusecase(gomock.NewController(t))
-				uc.EXPECT().Execute(gomock.Any(), id).
-					Return(domaintrip.Trip{ID: id, Status: domaintrip.ActiveStatus}, nil)
-				return uc
+			setup: func(ctrl *gomock.Controller) *gethttp.Handler {
+				uc := NewMockusecase(ctrl)
+				uc.EXPECT().Execute(gomock.Any(), id).Return(foundTrip, nil)
+				return gethttp.New(uc, time.Second, logger)
 			},
-			wantStatus: http.StatusOK,
+			in:              id,
+			wantStatus:      http.StatusOK,
+			wantContentType: "application/json",
+			wantTrip:        &expectedBody,
 		},
 		{
 			name: "not found",
-			setup: func(t *testing.T) *Mockusecase {
-				uc := NewMockusecase(gomock.NewController(t))
-				uc.EXPECT().Execute(gomock.Any(), id).
-					Return(domaintrip.Trip{}, fmt.Errorf("get: %w", domaintrip.ErrTripNotFound))
-				return uc
+			setup: func(ctrl *gomock.Controller) *gethttp.Handler {
+				uc := NewMockusecase(ctrl)
+				uc.EXPECT().Execute(gomock.Any(), id).Return(domaintrip.Trip{}, fmt.Errorf("get: %w", domaintrip.ErrTripNotFound))
+				return gethttp.New(uc, time.Second, logger)
 			},
-			wantStatus: http.StatusNotFound,
-			wantCode:   "trip_not_found",
+			in:              id,
+			wantStatus:      http.StatusNotFound,
+			wantContentType: "application/problem+json",
+			wantProblemCode: "trip_not_found",
+		},
+		{
+			name: "repository error",
+			setup: func(ctrl *gomock.Controller) *gethttp.Handler {
+				uc := NewMockusecase(ctrl)
+				uc.EXPECT().Execute(gomock.Any(), id).Return(domaintrip.Trip{}, dbErr)
+				return gethttp.New(uc, time.Second, logger)
+			},
+			in:              id,
+			wantStatus:      http.StatusInternalServerError,
+			wantContentType: "application/problem+json",
+			wantProblemCode: "internal_error",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			uc := tt.setup(t)
+			ctrl := gomock.NewController(t)
+			handler := tt.setup(ctrl)
 
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/trips/"+id.String(), nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/trips/"+tt.in.String(), nil)
 			rec := httptest.NewRecorder()
-			gethttp.New(uc, time.Second, slog.New(slog.NewJSONHandler(io.Discard, nil))).GetTrip(rec, req, id)
+			handler.GetTrip(rec, req, tt.in)
 
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())
-			}
-			if tt.wantStatus == http.StatusOK {
-				var body struct {
-					ID uuid.UUID `json:"id"`
-				}
-				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.ID != id {
-					t.Errorf("response ID = %s, error = %v", body.ID, err)
-				}
+			require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
+			assert.Equal(t, tt.wantContentType, rec.Header().Get("Content-Type"))
+
+			if tt.wantTrip != nil {
+				var got api.Trip
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+				assert.Equal(t, *tt.wantTrip, got)
 				return
 			}
 
-			var problem api.Problem
-			if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
-				t.Fatalf("decode Problem: %v", err)
-			}
-			if problem.Code != tt.wantCode {
-				t.Errorf("code = %q, want %q", problem.Code, tt.wantCode)
-			}
+			var got api.Problem
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+			assert.Equal(t, tt.wantProblemCode, got.Code)
+			assert.Equal(t, tt.wantStatus, int(got.Status))
+			assert.NotContains(t, rec.Body.String(), dbErr.Error())
 		})
 	}
 }

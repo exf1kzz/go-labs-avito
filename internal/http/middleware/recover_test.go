@@ -8,10 +8,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -35,23 +36,13 @@ func TestRecover(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want 500; body: %s", rec.Code, rec.Body.String())
-	}
-	if got := rec.Header().Get("Content-Type"); got != "application/problem+json" {
-		t.Errorf("Content-Type = %q", got)
-	}
+	require.Equal(t, http.StatusInternalServerError, rec.Code, rec.Body.String())
+	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
 
 	var problem api.Problem
-	if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
-		t.Fatalf("decode Problem: %v", err)
-	}
-	if problem.Code != "internal_error" {
-		t.Errorf("code = %q, want internal_error", problem.Code)
-	}
-	if strings.Contains(rec.Body.String(), "secret panic detail") {
-		t.Error("panic detail leaked into HTTP response")
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &problem))
+	assert.Equal(t, "internal_error", problem.Code)
+	assert.NotContains(t, rec.Body.String(), "secret panic detail")
 
 	var entry struct {
 		Level  string `json:"level"`
@@ -60,19 +51,13 @@ func TestRecover(t *testing.T) {
 		Panic  string `json:"panic"`
 		Stack  string `json:"stack"`
 	}
+	require.NoError(t, json.Unmarshal(logs.Bytes(), &entry), logs.String())
 
-	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
-		t.Fatalf("decode single JSON log entry: %v; logs: %s", err, logs.String())
-	}
-
-	if entry.Level != "ERROR" || entry.Msg != "request handled" ||
-		entry.Status != http.StatusInternalServerError {
-		t.Errorf("unexpected log entry: %+v", entry)
-	}
-
-	if entry.Panic != "secret panic detail" || entry.Stack == "" {
-		t.Error("panic detail or stack missing from log")
-	}
+	assert.Equal(t, "ERROR", entry.Level)
+	assert.Equal(t, "request handled", entry.Msg)
+	assert.Equal(t, http.StatusInternalServerError, entry.Status)
+	assert.Equal(t, "secret panic detail", entry.Panic)
+	assert.NotEmpty(t, entry.Stack)
 }
 
 type logSpanCapture struct {
@@ -94,9 +79,7 @@ func TestRecoverPreservesPanicTrace(t *testing.T) {
 	logger := slog.New(capture)
 	provider := sdktrace.NewTracerProvider()
 	t.Cleanup(func() {
-		if err := provider.Shutdown(context.Background()); err != nil {
-			t.Errorf("shutdown tracer provider: %v", err)
-		}
+		assert.NoError(t, provider.Shutdown(context.Background()))
 	})
 
 	var requestSpan trace.SpanContext
@@ -113,19 +96,9 @@ func TestRecoverPreservesPanicTrace(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/panic", nil))
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("status = %d, want 500", rec.Code)
-	}
-	if !requestSpan.IsValid() {
-		t.Fatal("HTTP span was not created")
-	}
-	if capture.calls != 1 {
-		t.Fatalf("log entries = %d, want 1", capture.calls)
-	}
-	if capture.span.TraceID() != requestSpan.TraceID() ||
-		capture.span.SpanID() != requestSpan.SpanID() {
-		t.Errorf("panic log span = %s/%s, request span = %s/%s",
-			capture.span.TraceID(), capture.span.SpanID(),
-			requestSpan.TraceID(), requestSpan.SpanID())
-	}
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
+	require.True(t, requestSpan.IsValid(), "HTTP span was not created")
+	require.Equal(t, 1, capture.calls)
+	assert.Equal(t, requestSpan.TraceID(), capture.span.TraceID())
+	assert.Equal(t, requestSpan.SpanID(), capture.span.SpanID())
 }

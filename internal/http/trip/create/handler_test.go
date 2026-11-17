@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"go.uber.org/mock/gomock"
 
@@ -21,138 +23,144 @@ import (
 	"github.com/exf1kzz/go-labs-avito/internal/model"
 )
 
+const contentType = "application/problem+json"
+
 func TestCreateTrip(t *testing.T) {
-	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	driverID := uuid.MustParse("00000000-0000-0000-0000-000000000002")
-	tripID := uuid.New()
+	userID := uuid.MustParse("00000000-0000-4000-8000-000000000001")
+	driverID := uuid.MustParse("00000000-0000-4000-8000-000000000002")
+	tripID := uuid.MustParse("00000000-0000-4000-8000-000000000003")
+	startedAt := time.Now().UTC()
+
 	validBody := `{
-		"user_id":"00000000-0000-0000-0000-000000000001",
-		"driver_id":"00000000-0000-0000-0000-000000000002",
+		"user_id":"00000000-0000-4000-8000-000000000001",
+		"driver_id":"00000000-0000-4000-8000-000000000002",
 		"start_point":{"latitude":55.75,"longitude":37.61},
 		"end_point":{"latitude":55.76,"longitude":37.62},
 		"price":100
 	}`
 	dbErr := errors.New("secret database detail")
 
-	wantInput := model.CreateTripInput{
-		UserID:   userID,
-		DriverID: driverID,
-		StartPoint: domaintrip.Point{
-			Latitude:  55.75,
-			Longitude: 37.61,
-		},
-		EndPoint: domaintrip.Point{
-			Latitude:  55.76,
-			Longitude: 37.62,
-		},
-		Price: 100,
+	input := model.CreateTripInput{
+		UserID:     userID,
+		DriverID:   driverID,
+		StartPoint: domaintrip.Point{Latitude: 55.75, Longitude: 37.61},
+		EndPoint:   domaintrip.Point{Latitude: 55.76, Longitude: 37.62},
+		Price:      100,
+	}
+	createdTrip := domaintrip.Trip{
+		ID:         tripID,
+		UserID:     userID,
+		DriverID:   driverID,
+		StartPoint: input.StartPoint,
+		EndPoint:   input.EndPoint,
+		Price:      input.Price,
+		Status:     domaintrip.ActiveStatus,
+		StartedAt:  startedAt,
+	}
+	expectedBody := api.Trip{
+		Id:         tripID,
+		UserId:     userID,
+		DriverId:   driverID,
+		StartPoint: api.Coordinates{Latitude: 55.75, Longitude: 37.61},
+		EndPoint:   api.Coordinates{Latitude: 55.76, Longitude: 37.62},
+		Price:      100,
+		Status:     api.TripStatus(domaintrip.ActiveStatus),
+		StartedAt:  startedAt,
 	}
 
-	createdTrip := domaintrip.Trip{
-		ID:        tripID,
-		UserID:    userID,
-		DriverID:  driverID,
-		Status:    domaintrip.ActiveStatus,
-		StartedAt: time.Now().UTC(),
-	}
+	counter, err := metricnoop.NewMeterProvider().Meter("test").Int64Counter("tripgo.trips.created")
+	require.NoError(t, err)
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 
 	tests := []struct {
-		name       string
-		body       string
-		setup      func(*testing.T) *Mockusecase
-		wantStatus int
-		wantCode   string
+		name            string
+		in              string
+		setup           func(*gomock.Controller) *createhttp.Handler
+		wantStatus      int
+		wantContentType string
+		wantLocation    string
+		wantTrip        *api.Trip
+		wantProblemCode string
 	}{
 		{
 			name: "success",
-			body: validBody,
-			setup: func(t *testing.T) *Mockusecase {
-				uc := NewMockusecase(gomock.NewController(t))
-				uc.EXPECT().
-					Execute(gomock.Any(), gomock.Eq(wantInput)).
-					Return(createdTrip, nil)
-				return uc
+			in:   validBody,
+			setup: func(ctrl *gomock.Controller) *createhttp.Handler {
+				uc := NewMockusecase(ctrl)
+				uc.EXPECT().Execute(gomock.Any(), input).Return(createdTrip, nil)
+				return createhttp.New(uc, time.Second, logger, counter)
 			},
-			wantStatus: http.StatusCreated,
+			wantStatus:      http.StatusCreated,
+			wantContentType: "application/json",
+			wantLocation:    "/api/v1/trips/" + tripID.String(),
+			wantTrip:        &expectedBody,
 		},
 		{
 			name: "invalid body",
-			body: `{`,
-			setup: func(t *testing.T) *Mockusecase {
-				return NewMockusecase(gomock.NewController(t))
+			in:   `{`,
+			setup: func(ctrl *gomock.Controller) *createhttp.Handler {
+				uc := NewMockusecase(ctrl)
+				return createhttp.New(uc, time.Second, logger, counter)
 			},
-			wantStatus: http.StatusBadRequest,
-			wantCode:   "invalid_request",
+			wantStatus:      http.StatusBadRequest,
+			wantContentType: contentType,
+			wantProblemCode: "invalid_request",
 		},
 		{
 			name: "driver busy",
-			body: validBody,
-			setup: func(t *testing.T) *Mockusecase {
-				uc := NewMockusecase(gomock.NewController(t))
-				uc.EXPECT().
-					Execute(gomock.Any(), gomock.Eq(wantInput)).
-					Return(domaintrip.Trip{}, domaintrip.ErrDriverBusy)
-				return uc
+			in:   validBody,
+			setup: func(ctrl *gomock.Controller) *createhttp.Handler {
+				uc := NewMockusecase(ctrl)
+				uc.EXPECT().Execute(gomock.Any(), input).Return(domaintrip.Trip{}, domaintrip.ErrDriverBusy)
+				return createhttp.New(uc, time.Second, logger, counter)
 			},
-			wantStatus: http.StatusConflict,
-			wantCode:   "driver_busy",
+			wantStatus:      http.StatusConflict,
+			wantContentType: contentType,
+			wantProblemCode: "driver_busy",
 		},
 		{
 			name: "repository error",
-			body: validBody,
-			setup: func(t *testing.T) *Mockusecase {
-				uc := NewMockusecase(gomock.NewController(t))
-				uc.EXPECT().
-					Execute(gomock.Any(), gomock.Eq(wantInput)).
-					Return(domaintrip.Trip{}, dbErr)
-				return uc
+			in:   validBody,
+			setup: func(ctrl *gomock.Controller) *createhttp.Handler {
+				uc := NewMockusecase(ctrl)
+				uc.EXPECT().Execute(gomock.Any(), input).Return(domaintrip.Trip{}, dbErr)
+				return createhttp.New(uc, time.Second, logger, counter)
 			},
-			wantStatus: http.StatusInternalServerError,
-			wantCode:   "internal_error",
+			wantStatus:      http.StatusInternalServerError,
+			wantContentType: contentType,
+			wantProblemCode: "internal_error",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			uc := tt.setup(t)
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/trips", strings.NewReader(tt.body))
+			ctrl := gomock.NewController(t)
+			handler := tt.setup(ctrl)
+
+			req := httptest.NewRequest(
+				http.MethodPost, "/api/v1/trips", strings.NewReader(tt.in),
+			)
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 
-			counter, err := metricnoop.NewMeterProvider().Meter("test").Int64Counter("tripgo.trips.created")
-			if err != nil {
-				t.Fatal(err)
-			}
+			handler.CreateTrip(rec, req, api.CreateTripParams{})
 
-			createhttp.New(uc, time.Second, slog.New(slog.NewJSONHandler(io.Discard, nil)), counter).CreateTrip(rec, req, api.CreateTripParams{})
+			require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
+			assert.Equal(t, tt.wantContentType, rec.Header().Get("Content-Type"))
+			assert.Equal(t, tt.wantLocation, rec.Header().Get("Location"))
 
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tt.wantStatus, rec.Body.String())
-			}
-
-			if tt.wantStatus == http.StatusCreated {
-				if rec.Header().Get("Location") != "/api/v1/trips/"+tripID.String() {
-					t.Errorf("Location = %q", rec.Header().Get("Location"))
-				}
-				var body struct {
-					ID uuid.UUID `json:"id"`
-				}
-				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.ID != tripID {
-					t.Errorf("response ID = %s, error = %v", body.ID, err)
-				}
+			if tt.wantTrip != nil {
+				var got api.Trip
+				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+				assert.Equal(t, *tt.wantTrip, got)
 				return
 			}
 
-			var problem api.Problem
-			if err := json.Unmarshal(rec.Body.Bytes(), &problem); err != nil {
-				t.Fatalf("decode Problem: %v", err)
-			}
-			if problem.Code != tt.wantCode {
-				t.Errorf("problem code = %q, want %q", problem.Code, tt.wantCode)
-			}
-			if strings.Contains(rec.Body.String(), dbErr.Error()) {
-				t.Error("database error leaked into HTTP response")
-			}
+			var got api.Problem
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+			assert.Equal(t, tt.wantProblemCode, got.Code)
+			assert.Equal(t, tt.wantStatus, int(got.Status))
+			assert.NotContains(t, rec.Body.String(), dbErr.Error())
 		})
 	}
 }

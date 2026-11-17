@@ -2,10 +2,10 @@ package get_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
 	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
@@ -13,37 +13,67 @@ import (
 )
 
 func TestExecute(t *testing.T) {
-	id := uuid.New()
-	wantTrip := domaintrip.Trip{ID: id, Status: domaintrip.ActiveStatus}
-	dbErr := errors.New("database unavailable")
+	tripID := uuid.MustParse("00000000-0000-4000-8000-000000000001")
+	expectedTrip := domaintrip.Trip{
+		ID:     tripID,
+		Status: domaintrip.ActiveStatus,
+	}
 
 	tests := []struct {
-		name     string
-		repoTrip domaintrip.Trip
-		repoErr  error
-		wantErr  error
+		name    string
+		setup   func(*gomock.Controller) *getuc.Usecase
+		in      uuid.UUID
+		want    domaintrip.Trip
+		wantErr assert.ErrorAssertionFunc
 	}{
-		{name: "trip found", repoTrip: wantTrip},
-		{name: "trip not found", repoErr: domaintrip.ErrTripNotFound, wantErr: domaintrip.ErrTripNotFound},
-		{name: "repository error", repoErr: dbErr, wantErr: dbErr},
+		{
+			name: "trip found",
+			setup: func(ctrl *gomock.Controller) *getuc.Usecase {
+				repo := NewMocktripRepository(ctrl)
+				repo.EXPECT().GetByID(gomock.Any(), tripID).Return(expectedTrip, nil)
+				return getuc.New(repo)
+			},
+			in:      tripID,
+			want:    expectedTrip,
+			wantErr: assert.NoError,
+		},
+		{
+			name: "trip not found",
+			setup: func(ctrl *gomock.Controller) *getuc.Usecase {
+				repo := NewMocktripRepository(ctrl)
+				repo.EXPECT().GetByID(gomock.Any(), tripID).Return(domaintrip.Trip{}, domaintrip.ErrTripNotFound)
+				return getuc.New(repo)
+			},
+			in:   tripID,
+			want: domaintrip.Trip{},
+			wantErr: func(t assert.TestingT, err error, msgAndArgs ...any) bool {
+				return assert.ErrorIs(t, err, domaintrip.ErrTripNotFound, msgAndArgs...)
+			},
+		},
+		{
+			name: "repository error",
+			setup: func(ctrl *gomock.Controller) *getuc.Usecase {
+				repo := NewMocktripRepository(ctrl)
+				repo.EXPECT().GetByID(gomock.Any(), tripID).Return(domaintrip.Trip{}, assert.AnError)
+				return getuc.New(repo)
+			},
+			in:   tripID,
+			want: domaintrip.Trip{},
+			wantErr: func(t assert.TestingT, err error, msgAndArgs ...any) bool {
+				return assert.ErrorIs(t, err, assert.AnError, msgAndArgs...)
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			repo := NewMocktripRepository(ctrl)
-			repo.EXPECT().GetByID(gomock.Any(), id).Return(tt.repoTrip, tt.repoErr)
+			uc := tt.setup(ctrl)
 
-			got, err := getuc.New(repo).Execute(context.Background(), id)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("Execute() error = %v, want %v", err, tt.wantErr)
-			}
-			if tt.wantErr == nil && got.ID != wantTrip.ID {
-				t.Errorf("trip ID = %s, want %s", got.ID, wantTrip.ID)
-			}
-			if tt.wantErr != nil && got != (domaintrip.Trip{}) {
-				t.Errorf("trip on error = %+v, want zero value", got)
-			}
+			got, err := uc.Execute(context.Background(), tt.in)
+
+			tt.wantErr(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
