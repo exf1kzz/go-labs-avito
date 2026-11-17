@@ -48,7 +48,10 @@ func (t *Trip) Finish(at time.Time) error {
 }
 
 func (t Trip) ValidateCreate() error {
-	err := createValidator.Struct(t)
+	return validationError(createValidator.Struct(t))
+}
+
+func validationError(err error) error {
 	if err == nil {
 		return nil
 	}
