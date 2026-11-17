@@ -1,5 +1,5 @@
-.PHONY: generate run test test-race start stop status connect \
-	migrate migrate-down migrate-down-all migrate-status
+.PHONY: generate run test test-integration test-race start stop status connect \
+	migrate migrate-down migrate-down-all migrate-status lint
 
 generate:
 	mkdir -p internal/generated
@@ -7,12 +7,17 @@ generate:
 		-config oapi-codegen.yaml \
 		-o internal/generated/api.gen.go \
 		contracts/openapi/trip-service.openapi.yaml
+	go generate ./internal/usecase/trip/... ./internal/http/trip/...
 
 run:
-	set -a; . ./.env.example; . ./.env; set +a; go run ./cmd/trip-service
+	set -a; . ./.env.example; . ./.env; set +a; go run ./cmd/service
 
 test:
-	go test -race ./...
+	go test -race -count=2 -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out | tail -1
+
+test-integration:
+	set -a; . ./.env; set +a; go test -race -count=2 -tags=integration ./internal/repository/...
 
 test-race: test
 
@@ -39,3 +44,6 @@ migrate-down-all:
 
 migrate-status:
 	set -a; . ./.env; set +a; go tool goose -dir migrations postgres "$$DATABASE_URL" status
+
+lint:
+	golangci-lint run ./...
