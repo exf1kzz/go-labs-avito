@@ -1,0 +1,12 @@
+package create
+
+import (
+	"context"
+
+	domaintrip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
+)
+
+//go:generate go tool mockgen -source=contract.go -destination=mocks_test.go -package=create_test
+type usecase interface {
+	Execute(context.Context, domaintrip.Position) (domaintrip.Position, error)
+}

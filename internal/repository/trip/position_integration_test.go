@@ -43,10 +43,17 @@ func TestCreatePositionIntegration(t *testing.T) {
 		"SELECT last_position_at FROM trips WHERE id = $1", trip.ID,
 	).Scan(&lastPositionAt)
 	require.NoError(t, err)
-	assert.True(t, lastPositionAt.Equal(freshAt), "last_position_at = %s, want %s", lastPositionAt, freshAt)
+	assert.True(t, lastPositionAt.Equal(freshAt))
 
-	_, err = repo.Finish(ctx, trip.ID, time.Now().UTC())
+	loaded, err := repo.GetByID(ctx, trip.ID)
 	require.NoError(t, err)
+	require.NotNil(t, loaded.LastPositionAt)
+	assert.True(t, loaded.LastPositionAt.Equal(freshAt))
+
+	finished, err := repo.Finish(ctx, trip.ID, time.Now().UTC())
+	require.NoError(t, err)
+	require.NotNil(t, finished.LastPositionAt)
+	assert.True(t, finished.LastPositionAt.Equal(freshAt))
 
 	_, err = usecase.Execute(ctx, domaintrip.Position{
 		TripID:      trip.ID,

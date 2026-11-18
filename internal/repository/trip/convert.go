@@ -21,6 +21,7 @@ func scanTrip(row pgx.Row) (domaintrip.Trip, error) {
 		&trip.Status,
 		&trip.StartedAt,
 		&trip.FinishedAt,
+		&trip.LastPositionAt,
 	)
 	if err != nil {
 		return domaintrip.Trip{}, err

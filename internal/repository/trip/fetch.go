@@ -29,6 +29,7 @@ func (r *TripRepository) GetByID(
 			"status",
 			"started_at",
 			"finished_at",
+			"last_position_at",
 		).
 		From("trips").
 		Where(sq.Eq{"id": tripID}).

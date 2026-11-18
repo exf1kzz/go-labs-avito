@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/metric"
@@ -17,6 +18,7 @@ import (
 	createhttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/create"
 	finishhttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/finish"
 	gethttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/get"
+	positioncreatehttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/position/create"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/postgres"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/postgres/transaction"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/telemetry"
@@ -24,6 +26,7 @@ import (
 	createuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/create"
 	finishuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/finish"
 	getuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/get"
+	positioncreateuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/position/create"
 )
 
 type Container struct {
@@ -92,6 +95,18 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 		)
 	}
 
+	positionsSaved, err := tripMeter.Int64Counter("tripgo.positions.saved")
+	if err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		defer cancel()
+
+		return nil, errors.Join(
+			fmt.Errorf("create positions saved counter: %w", err),
+			meterProvider.Shutdown(cleanupCtx),
+			tracerProvider.Shutdown(cleanupCtx),
+		)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Database, tracerProvider, meterProvider)
 	if err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
@@ -113,6 +128,7 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 		createhttp.New(createuc.New(tripRepository, txManager), timeout, logger, tripsCreated),
 		gethttp.New(getuc.New(tripRepository), timeout, logger),
 		finishhttp.New(finishuc.New(tripRepository, txManager), timeout, logger, tripsCompleted),
+		positioncreatehttp.New(positioncreateuc.New(tripRepository, txManager, time.Now), timeout, logger, positionsSaved),
 		timeout,
 	)
 
