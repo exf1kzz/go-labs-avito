@@ -103,3 +103,51 @@ func TestPositionTransactionRollbackIntegration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, count)
 }
+
+func TestListPositionsIntegration(t *testing.T) {
+	ctx, pool, repo := setupRepository(t)
+	trip := newTestTrip(uuid.New())
+	cleanupTrip(t, pool, trip.ID)
+	require.NoError(t, repo.Create(ctx, trip))
+
+	empty, err := repo.ListPositions(ctx, trip.ID)
+	require.NoError(t, err)
+	require.NotNil(t, empty)
+	assert.Empty(t, empty)
+
+	later := time.Now().UTC().Truncate(time.Microsecond)
+	earlier := later.Add(-time.Minute)
+
+	first, err := repo.InsertPosition(ctx, domaintrip.Position{
+		TripID:      trip.ID,
+		Coordinates: domaintrip.Point{Latitude: 1, Longitude: 1},
+		RecordedAt:  later,
+	})
+	require.NoError(t, err)
+
+	second, err := repo.InsertPosition(ctx, domaintrip.Position{
+		TripID:      trip.ID,
+		Coordinates: domaintrip.Point{Latitude: 2, Longitude: 2},
+		RecordedAt:  earlier,
+	})
+	require.NoError(t, err)
+
+	third, err := repo.InsertPosition(ctx, domaintrip.Position{
+		TripID:      trip.ID,
+		Coordinates: domaintrip.Point{Latitude: 3, Longitude: 3},
+		RecordedAt:  later,
+	})
+	require.NoError(t, err)
+
+	got, err := repo.ListPositions(ctx, trip.ID)
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+
+	want := []domaintrip.Position{second, first, third}
+	for i := range want {
+		assert.Equal(t, want[i].ID, got[i].ID, "position %d: order", i)
+		assert.Equal(t, want[i].TripID, got[i].TripID)
+		assert.Equal(t, want[i].Coordinates, got[i].Coordinates)
+		assert.True(t, got[i].RecordedAt.Equal(want[i].RecordedAt), "position %d: recorded_at", i)
+	}
+}

@@ -19,6 +19,7 @@ import (
 	finishhttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/finish"
 	gethttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/get"
 	positioncreatehttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/position/create"
+	positionlisthttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/position/list"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/postgres"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/postgres/transaction"
 	"github.com/exf1kzz/go-labs-avito/internal/infra/telemetry"
@@ -27,6 +28,7 @@ import (
 	finishuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/finish"
 	getuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/get"
 	positioncreateuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/position/create"
+	positionlistuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/position/list"
 )
 
 type Container struct {
@@ -129,6 +131,7 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 		gethttp.New(getuc.New(tripRepository), timeout, logger),
 		finishhttp.New(finishuc.New(tripRepository, txManager), timeout, logger, tripsCompleted),
 		positioncreatehttp.New(positioncreateuc.New(tripRepository, txManager, time.Now), timeout, logger, positionsSaved),
+		positionlisthttp.New(positionlistuc.New(tripRepository), timeout, logger),
 		timeout,
 	)
 
