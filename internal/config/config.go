@@ -25,9 +25,15 @@ type DatabaseConfig struct {
 	QueryTimeout    time.Duration
 }
 
+type PushConfig struct {
+	URL            string
+	RequestTimeout time.Duration
+}
+
 type Config struct {
 	HTTP            HTTPConfig
 	Database        DatabaseConfig
+	Push            PushConfig
 	LogLevel        string
 	ShutdownTimeout time.Duration
 }
@@ -119,6 +125,16 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf(
 			"DATABASE_MIN_CONNS must not exceed DATABASE_MAX_CONNS",
 		)
+	}
+
+	config.Push.URL, err = requiredString("PUSH_HTTP_URL")
+	if err != nil {
+		return Config{}, err
+	}
+
+	config.Push.RequestTimeout, err = requiredDuration("PUSH_REQUEST_TIMEOUT")
+	if err != nil {
+		return Config{}, err
 	}
 
 	return config, nil

@@ -14,6 +14,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/exf1kzz/go-labs-avito/internal/config"
+	pushgateway "github.com/exf1kzz/go-labs-avito/internal/gateway/push"
 	transport "github.com/exf1kzz/go-labs-avito/internal/http"
 	createhttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/create"
 	finishhttp "github.com/exf1kzz/go-labs-avito/internal/http/trip/finish"
@@ -37,10 +38,18 @@ type Container struct {
 	Logger         *slog.Logger
 	tracerProvider *sdktrace.TracerProvider
 	meterProvider  *sdkmetric.MeterProvider
+	PushGateway    *pushgateway.Gateway
+	pushClient     *http.Client
 }
 
 func New(ctx context.Context, cfg config.Config) (*Container, error) {
 	logger := telemetry.NewLogger(cfg.LogLevel)
+
+	pushClient := &http.Client{Timeout: cfg.Push.RequestTimeout}
+	pushGateway, err := pushgateway.New(cfg.Push.URL, pushClient)
+	if err != nil {
+		return nil, fmt.Errorf("create push gateway: %w", err)
+	}
 
 	tracerProvider, err := telemetry.NewTracerProvider(ctx)
 	if err != nil {
@@ -141,11 +150,15 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 		Logger:         logger,
 		tracerProvider: tracerProvider,
 		meterProvider:  meterProvider,
+		PushGateway:    pushGateway,
+		pushClient:     pushClient,
 	}, nil
 }
 
 func (c *Container) Close(ctx context.Context) error {
+	c.pushClient.CloseIdleConnections()
 	c.pool.Close()
+
 	return errors.Join(
 		c.meterProvider.Shutdown(ctx),
 		c.tracerProvider.Shutdown(ctx),
