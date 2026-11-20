@@ -7,7 +7,7 @@ generate:
 		-config oapi-codegen.yaml \
 		-o internal/generated/api.gen.go \
 		contracts/openapi/trip-service.openapi.yaml
-	go generate ./internal/usecase/trip/... ./internal/http/trip/...
+	go generate ./internal/usecase/trip/... ./internal/http/trip/... ./internal/gateway/... ./internal/worker/...
 
 run:
 	set -a; . ./.env.example; . ./.env; set +a; go run ./cmd/service

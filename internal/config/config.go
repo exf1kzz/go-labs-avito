@@ -25,9 +25,23 @@ type DatabaseConfig struct {
 	QueryTimeout    time.Duration
 }
 
+type PushConfig struct {
+	URL            string
+	RequestTimeout time.Duration
+}
+
+type PositionsConfig struct {
+	CheckInterval time.Duration
+	StaleAfter    time.Duration
+	Workers       int
+	QueueSize     int
+}
+
 type Config struct {
 	HTTP            HTTPConfig
 	Database        DatabaseConfig
+	Push            PushConfig
+	Positions       PositionsConfig
 	LogLevel        string
 	ShutdownTimeout time.Duration
 }
@@ -120,6 +134,44 @@ func Load() (Config, error) {
 			"DATABASE_MIN_CONNS must not exceed DATABASE_MAX_CONNS",
 		)
 	}
+
+	config.Push.URL, err = requiredString("PUSH_HTTP_URL")
+	if err != nil {
+		return Config{}, err
+	}
+
+	config.Push.RequestTimeout, err = requiredDuration("PUSH_REQUEST_TIMEOUT")
+	if err != nil {
+		return Config{}, err
+	}
+
+	config.Positions.CheckInterval, err = requiredDuration("POSITION_CHECK_INTERVAL")
+	if err != nil {
+		return Config{}, err
+	}
+
+	config.Positions.StaleAfter, err = requiredDuration("POSITION_STALE_AFTER")
+	if err != nil {
+		return Config{}, err
+	}
+
+	workers, err := requiredInt32("POSITION_WORKERS")
+	if err != nil {
+		return Config{}, err
+	}
+	if workers == 0 {
+		return Config{}, fmt.Errorf("POSITION_WORKERS must be positive")
+	}
+	config.Positions.Workers = int(workers)
+
+	queueSize, err := requiredInt32("POSITION_QUEUE_SIZE")
+	if err != nil {
+		return Config{}, err
+	}
+	if queueSize == 0 {
+		return Config{}, fmt.Errorf("POSITION_QUEUE_SIZE must be positive")
+	}
+	config.Positions.QueueSize = int(queueSize)
 
 	return config, nil
 }

@@ -39,7 +39,8 @@ func (r *TripRepository) Finish(
 				price,
 				status,
 				started_at,
-				finished_at
+				finished_at,
+				last_position_at
 		`).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
