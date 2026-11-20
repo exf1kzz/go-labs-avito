@@ -43,7 +43,7 @@ func TestListStaleActiveIntegration(t *testing.T) {
 	_, err := repo.Finish(ctx, completed, now)
 	require.NoError(t, err)
 
-	ids, err := repo.ListStaleActive(ctx, 10*time.Minute, 1000)
+	ids, err := repo.ListStaleActive(ctx, 10*time.Minute)
 	require.NoError(t, err)
 
 	require.Contains(t, ids, oldNoPosition)
@@ -53,8 +53,4 @@ func TestListStaleActiveIntegration(t *testing.T) {
 	assert.NotContains(t, ids, freshPosition)
 	assert.NotContains(t, ids, freshStart)
 	assert.NotContains(t, ids, completed)
-
-	limited, err := repo.ListStaleActive(ctx, 10*time.Minute, 1)
-	require.NoError(t, err)
-	assert.Len(t, limited, 1)
 }

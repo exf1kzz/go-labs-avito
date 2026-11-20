@@ -19,3 +19,7 @@ type tripRepository interface {
 type txManager interface {
 	Do(ctx context.Context, fn func(context.Context) error) error
 }
+
+type positionCanceler interface {
+	Cancel(tripID uuid.UUID)
+}

@@ -14,6 +14,8 @@ import (
 	reflect "reflect"
 	time "time"
 
+	trip "github.com/exf1kzz/go-labs-avito/internal/domain/trip"
+	positions "github.com/exf1kzz/go-labs-avito/internal/worker/positions"
 	uuid "github.com/google/uuid"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -43,18 +45,18 @@ func (m *MockstaleRepository) EXPECT() *MockstaleRepositoryMockRecorder {
 }
 
 // ListStaleActive mocks base method.
-func (m *MockstaleRepository) ListStaleActive(ctx context.Context, duration time.Duration, batchSize uint64) ([]uuid.UUID, error) {
+func (m *MockstaleRepository) ListStaleActive(ctx context.Context, duration time.Duration) ([]uuid.UUID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListStaleActive", ctx, duration, batchSize)
+	ret := m.ctrl.Call(m, "ListStaleActive", ctx, duration)
 	ret0, _ := ret[0].([]uuid.UUID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListStaleActive indicates an expected call of ListStaleActive.
-func (mr *MockstaleRepositoryMockRecorder) ListStaleActive(ctx, duration, batchSize any) *gomock.Call {
+func (mr *MockstaleRepositoryMockRecorder) ListStaleActive(ctx, duration any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListStaleActive", reflect.TypeOf((*MockstaleRepository)(nil).ListStaleActive), ctx, duration, batchSize)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListStaleActive", reflect.TypeOf((*MockstaleRepository)(nil).ListStaleActive), ctx, duration)
 }
 
 // MockjobQueue is a mock of jobQueue interface.
@@ -82,15 +84,92 @@ func (m *MockjobQueue) EXPECT() *MockjobQueueMockRecorder {
 }
 
 // TrySubmit mocks base method.
-func (m *MockjobQueue) TrySubmit(arg0 uuid.UUID) bool {
+func (m *MockjobQueue) TrySubmit(arg0 context.Context, arg1 uuid.UUID) positions.SubmitResult {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TrySubmit", arg0)
-	ret0, _ := ret[0].(bool)
+	ret := m.ctrl.Call(m, "TrySubmit", arg0, arg1)
+	ret0, _ := ret[0].(positions.SubmitResult)
 	return ret0
 }
 
 // TrySubmit indicates an expected call of TrySubmit.
-func (mr *MockjobQueueMockRecorder) TrySubmit(arg0 any) *gomock.Call {
+func (mr *MockjobQueueMockRecorder) TrySubmit(arg0, arg1 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrySubmit", reflect.TypeOf((*MockjobQueue)(nil).TrySubmit), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrySubmit", reflect.TypeOf((*MockjobQueue)(nil).TrySubmit), arg0, arg1)
+}
+
+// MocktripReader is a mock of tripReader interface.
+type MocktripReader struct {
+	ctrl     *gomock.Controller
+	recorder *MocktripReaderMockRecorder
+	isgomock struct{}
+}
+
+// MocktripReaderMockRecorder is the mock recorder for MocktripReader.
+type MocktripReaderMockRecorder struct {
+	mock *MocktripReader
+}
+
+// NewMocktripReader creates a new mock instance.
+func NewMocktripReader(ctrl *gomock.Controller) *MocktripReader {
+	mock := &MocktripReader{ctrl: ctrl}
+	mock.recorder = &MocktripReaderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktripReader) EXPECT() *MocktripReaderMockRecorder {
+	return m.recorder
+}
+
+// GetByID mocks base method.
+func (m *MocktripReader) GetByID(ctx context.Context, tripID uuid.UUID) (trip.Trip, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByID", ctx, tripID)
+	ret0, _ := ret[0].(trip.Trip)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByID indicates an expected call of GetByID.
+func (mr *MocktripReaderMockRecorder) GetByID(ctx, tripID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MocktripReader)(nil).GetByID), ctx, tripID)
+}
+
+// MockpushSender is a mock of pushSender interface.
+type MockpushSender struct {
+	ctrl     *gomock.Controller
+	recorder *MockpushSenderMockRecorder
+	isgomock struct{}
+}
+
+// MockpushSenderMockRecorder is the mock recorder for MockpushSender.
+type MockpushSenderMockRecorder struct {
+	mock *MockpushSender
+}
+
+// NewMockpushSender creates a new mock instance.
+func NewMockpushSender(ctrl *gomock.Controller) *MockpushSender {
+	mock := &MockpushSender{ctrl: ctrl}
+	mock.recorder = &MockpushSenderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockpushSender) EXPECT() *MockpushSenderMockRecorder {
+	return m.recorder
+}
+
+// RequestPosition mocks base method.
+func (m *MockpushSender) RequestPosition(ctx context.Context, driverID, tripID uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RequestPosition", ctx, driverID, tripID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RequestPosition indicates an expected call of RequestPosition.
+func (mr *MockpushSenderMockRecorder) RequestPosition(ctx, driverID, tripID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestPosition", reflect.TypeOf((*MockpushSender)(nil).RequestPosition), ctx, driverID, tripID)
 }

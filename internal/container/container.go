@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
@@ -30,6 +32,7 @@ import (
 	getuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/get"
 	positioncreateuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/position/create"
 	positionlistuc "github.com/exf1kzz/go-labs-avito/internal/usecase/trip/position/list"
+	"github.com/exf1kzz/go-labs-avito/internal/worker/positions"
 )
 
 type Container struct {
@@ -40,6 +43,10 @@ type Container struct {
 	meterProvider  *sdkmetric.MeterProvider
 	PushGateway    *pushgateway.Gateway
 	pushClient     *http.Client
+	positionPool   *positions.Pool
+	scannerCancel  context.CancelFunc
+	scannerDone    chan struct{}
+	scannerTicker  positions.Ticker
 }
 
 func New(ctx context.Context, cfg config.Config) (*Container, error) {
@@ -55,6 +62,15 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create tracer provider: %w", err)
 	}
+
+	pushClient.Transport = otelhttp.NewTransport(
+		http.DefaultTransport,
+		otelhttp.WithTracerProvider(tracerProvider),
+		otelhttp.WithPropagators(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		)),
+	)
 
 	meterProvider, err := telemetry.NewMeterProvider(ctx)
 	if err != nil {
@@ -118,6 +134,18 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 		)
 	}
 
+	staleChecks, err := tripMeter.Int64Counter("tripgo.stale_checks")
+	if err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		defer cancel()
+
+		return nil, errors.Join(
+			fmt.Errorf("create stale checks counter: %w", err),
+			meterProvider.Shutdown(cleanupCtx),
+			tracerProvider.Shutdown(cleanupCtx),
+		)
+	}
+
 	pool, err := postgres.NewPool(ctx, cfg.Database, tracerProvider, meterProvider)
 	if err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
@@ -133,15 +161,65 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 	txManager := transaction.NewTransactionManager(pool)
 	tripRepository := triprepo.NewTripRepository(txManager)
 
+	positionPool, err := positions.NewPool(
+		tripRepository,
+		pushGateway,
+		positions.PoolConfig{
+			Workers:        cfg.Positions.Workers,
+			QueueSize:      cfg.Positions.QueueSize,
+			StaleAfter:     cfg.Positions.StaleAfter,
+			QueryTimeout:   cfg.Database.QueryTimeout,
+			RequestTimeout: cfg.Push.RequestTimeout,
+		},
+		time.Now,
+		logger,
+		meterProvider.Meter("trip-service/positions"),
+		tracerProvider.Tracer("trip-service/positions"),
+	)
+	if err != nil {
+		pool.Close()
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		defer cancel()
+
+		return nil, errors.Join(
+			fmt.Errorf("create positions pool: %w", err),
+			meterProvider.Shutdown(cleanupCtx),
+			tracerProvider.Shutdown(cleanupCtx),
+		)
+	}
+
 	timeout := cfg.Database.QueryTimeout
 	tripHandler := transport.NewServer(
 		pool,
 		createhttp.New(createuc.New(tripRepository, txManager), timeout, logger, tripsCreated),
 		gethttp.New(getuc.New(tripRepository), timeout, logger),
 		finishhttp.New(finishuc.New(tripRepository, txManager), timeout, logger, tripsCompleted),
-		positioncreatehttp.New(positioncreateuc.New(tripRepository, txManager, time.Now), timeout, logger, positionsSaved),
+		positioncreatehttp.New(positioncreateuc.New(tripRepository, txManager, positionPool, time.Now), timeout, logger, positionsSaved),
 		positionlisthttp.New(positionlistuc.New(tripRepository), timeout, logger),
 		timeout,
+	)
+
+	scanner := positions.New(
+		tripRepository,
+		positionPool,
+		cfg.Positions.StaleAfter,
+		cfg.Database.QueryTimeout,
+		logger,
+		staleChecks,
+		tracerProvider.Tracer("trip-service/positions"),
+	)
+
+	scannerCtx, scannerCancel := context.WithCancel(context.WithoutCancel(ctx))
+	scannerTicker := positions.NewSystemTicker(cfg.Positions.CheckInterval)
+	scannerDone := make(chan struct{})
+
+	go func() {
+		defer close(scannerDone)
+		scanner.Run(scannerCtx, scannerTicker)
+	}()
+
+	logger.Info("positions scanner started",
+		"interval", cfg.Positions.CheckInterval,
 	)
 
 	return &Container{
@@ -152,10 +230,49 @@ func New(ctx context.Context, cfg config.Config) (*Container, error) {
 		meterProvider:  meterProvider,
 		PushGateway:    pushGateway,
 		pushClient:     pushClient,
+		positionPool:   positionPool,
+		scannerCancel:  scannerCancel,
+		scannerDone:    scannerDone,
+		scannerTicker:  scannerTicker,
 	}, nil
 }
 
 func (c *Container) Close(ctx context.Context) error {
+	c.Logger.Info("stopping positions scanner")
+	c.scannerCancel()
+	c.scannerTicker.Stop()
+
+	select {
+	case <-c.scannerDone:
+		c.Logger.Info("positions scanner stopped")
+	case <-ctx.Done():
+		c.positionPool.Close()
+		c.positionPool.Abort()
+		return fmt.Errorf("stop positions scanner: %w", ctx.Err())
+	}
+
+	c.Logger.Info("draining position workers")
+	c.positionPool.Close()
+
+	workersDone := make(chan struct{})
+	go func() {
+		c.positionPool.Wait()
+		close(workersDone)
+	}()
+
+	select {
+	case <-workersDone:
+		c.Logger.Info("position workers stopped")
+	case <-ctx.Done():
+		c.positionPool.Abort()
+		select {
+		case <-workersDone:
+			c.Logger.Info("position workers stopped after cancellation")
+		default:
+			return fmt.Errorf("drain position workers: %w", ctx.Err())
+		}
+	}
+
 	c.pushClient.CloseIdleConnections()
 	c.pool.Close()
 

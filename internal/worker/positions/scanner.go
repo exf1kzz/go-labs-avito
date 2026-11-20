@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Scanner struct {
@@ -12,8 +16,9 @@ type Scanner struct {
 	queue        jobQueue
 	staleAfter   time.Duration
 	queryTimeout time.Duration
-	batchSize    uint64
 	logger       *slog.Logger
+	staleChecks  metric.Int64Counter
+	tracer       trace.Tracer
 }
 
 func New(
@@ -21,25 +26,27 @@ func New(
 	queue jobQueue,
 	staleAfter time.Duration,
 	queryTimeout time.Duration,
-	batchSize uint64,
 	logger *slog.Logger,
+	staleChecks metric.Int64Counter,
+	tracer trace.Tracer,
 ) *Scanner {
 	return &Scanner{
 		repository:   repository,
 		queue:        queue,
 		staleAfter:   staleAfter,
 		queryTimeout: queryTimeout,
-		batchSize:    batchSize,
 		logger:       logger,
+		staleChecks:  staleChecks,
+		tracer:       tracer,
 	}
 }
 
-func (s *Scanner) Run(ctx context.Context, ticks <-chan time.Time) {
+func (s *Scanner) Run(ctx context.Context, ticker Ticker) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case _, ok := <-ticks:
+		case _, ok := <-ticker.C():
 			if !ok {
 				return
 			}
@@ -51,10 +58,13 @@ func (s *Scanner) Run(ctx context.Context, ticks <-chan time.Time) {
 }
 
 func (s *Scanner) ScanOnce(ctx context.Context) error {
+	ctx, span := s.tracer.Start(ctx, "positions.scan")
+	defer span.End()
+
 	queryCtx, cancel := context.WithTimeout(ctx, s.queryTimeout)
 	defer cancel()
 
-	ids, err := s.repository.ListStaleActive(queryCtx, s.staleAfter, s.batchSize)
+	ids, err := s.repository.ListStaleActive(queryCtx, s.staleAfter)
 	if err != nil {
 		return fmt.Errorf("list stale active trips: %w", err)
 	}
@@ -63,7 +73,14 @@ func (s *Scanner) ScanOnce(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		s.queue.TrySubmit(id)
+
+		result := s.queue.TrySubmit(ctx, id)
+		s.staleChecks.Add(ctx, 1,
+			metric.WithAttributes(attribute.String("result", string(result))),
+		)
+		if result == SubmitDropped {
+			s.logger.Warn("position request queue is full", "trip_id", id)
+		}
 	}
 
 	return nil

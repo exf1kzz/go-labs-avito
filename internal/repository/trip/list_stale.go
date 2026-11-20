@@ -14,13 +14,9 @@ import (
 func (r *TripRepository) ListStaleActive(
 	ctx context.Context,
 	timeout time.Duration,
-	limit uint64,
 ) ([]uuid.UUID, error) {
 	if timeout <= 0 {
 		return nil, fmt.Errorf("list stale active trips: timeout must be positive")
-	}
-	if limit == 0 {
-		return nil, fmt.Errorf("list stale active trips: limit must be positive")
 	}
 
 	query, args, err := sq.
@@ -32,7 +28,6 @@ func (r *TripRepository) ListStaleActive(
 			timeout.Seconds(),
 		)).
 		OrderBy("COALESCE(last_position_at, started_at) ASC", "id ASC").
-		Limit(limit).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {

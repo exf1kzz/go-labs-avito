@@ -11,13 +11,20 @@ import (
 type Usecase struct {
 	repository tripRepository
 	txManager  txManager
+	canceler   positionCanceler
 	now        func() time.Time
 }
 
-func New(repository tripRepository, txManager txManager, now func() time.Time) *Usecase {
+func New(
+	repository tripRepository,
+	txManager txManager,
+	canceler positionCanceler,
+	now func() time.Time,
+) *Usecase {
 	return &Usecase{
 		repository: repository,
 		txManager:  txManager,
+		canceler:   canceler,
 		now:        now,
 	}
 }
@@ -52,6 +59,10 @@ func (u *Usecase) Execute(
 	})
 	if err != nil {
 		return domaintrip.Position{}, fmt.Errorf("create trip position: %w", err)
+	}
+
+	if u.canceler != nil {
+		u.canceler.Cancel(position.TripID)
 	}
 
 	return saved, nil

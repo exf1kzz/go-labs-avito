@@ -82,6 +82,11 @@ func TestExecute(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			repo := NewMocktripRepository(ctrl)
 			tx := NewMocktxManager(ctrl)
+			canceler := NewMockpositionCanceler(ctrl)
+			if tt.wantErr == nil {
+				canceler.EXPECT().Cancel(input.TripID)
+			}
+
 			tx.EXPECT().Do(ctx, gomock.Any()).DoAndReturn(
 				func(txCtx context.Context, fn func(context.Context) error) error {
 					return fn(txCtx)
@@ -89,7 +94,7 @@ func TestExecute(t *testing.T) {
 			)
 			tt.setup(repo)
 
-			got, err := positioncreate.New(repo, tx, func() time.Time { return input.RecordedAt }).Execute(ctx, input)
+			got, err := positioncreate.New(repo, tx, canceler, func() time.Time { return input.RecordedAt }).Execute(ctx, input)
 
 			if tt.wantErr == nil {
 				assert.NoError(t, err)
@@ -113,7 +118,9 @@ func TestExecuteInvalidPositionSkipsTransaction(t *testing.T) {
 		RecordedAt:  now,
 	}
 
-	_, err := positioncreate.New(repo, tx, func() time.Time { return now }).
+	canceler := NewMockpositionCanceler(ctrl)
+
+	_, err := positioncreate.New(repo, tx, canceler, func() time.Time { return now }).
 		Execute(context.Background(), position)
 
 	var validationErr *domaintrip.ValidationError

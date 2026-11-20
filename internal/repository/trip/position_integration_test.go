@@ -18,7 +18,7 @@ import (
 
 func TestCreatePositionIntegration(t *testing.T) {
 	ctx, pool, repo := setupRepository(t)
-	usecase := positioncreate.New(repo, transaction.NewTransactionManager(pool), time.Now)
+	usecase := positioncreate.New(repo, transaction.NewTransactionManager(pool), nil, time.Now)
 
 	trip := newTestTrip(uuid.New())
 	cleanupTrip(t, pool, trip.ID)

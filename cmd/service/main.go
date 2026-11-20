@@ -42,15 +42,6 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("build container: %w", err)
 	}
 
-	defer func() {
-		closeCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
-		defer cancel()
-
-		if err := app.Close(closeCtx); err != nil {
-			app.Logger.Error("close application", "error", err)
-		}
-	}()
-
 	server := &http.Server{
 		Addr:              cfg.HTTP.Address,
 		Handler:           app.Handler,
@@ -63,18 +54,19 @@ func run(ctx context.Context) error {
 	app.Logger.Info("HTTP server listening", "address", server.Addr)
 
 	serverErrors := make(chan error, 1)
-
 	go func() {
 		serverErrors <- server.ListenAndServe()
 	}()
 
+	var serveErr error
+	serverStopped := false
+
 	select {
 	case err := <-serverErrors:
+		serverStopped = true
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("serve HTTP: %w", err)
+			serveErr = fmt.Errorf("serve HTTP: %w", err)
 		}
-
-		return nil
 	case <-ctx.Done():
 		app.Logger.Info("shutdown signal received")
 	}
@@ -85,21 +77,31 @@ func run(ctx context.Context) error {
 	)
 	defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		app.Logger.Error("graceful HTTP shutdown failed", "error", err)
+	var shutdownErr error
+	if !serverStopped {
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			app.Logger.Error("graceful HTTP shutdown failed", "error", err)
+			shutdownErr = fmt.Errorf("shutdown HTTP server: %w", err)
 
-		if closeErr := server.Close(); closeErr != nil {
-			return fmt.Errorf("force close HTTP server: %w", closeErr)
+			if closeErr := server.Close(); closeErr != nil {
+				shutdownErr = errors.Join(
+					shutdownErr,
+					fmt.Errorf("force close HTTP server: %w", closeErr),
+				)
+			}
+		} else {
+			app.Logger.Info("HTTP server stopped")
 		}
 
-		return fmt.Errorf("shutdown HTTP server: %w", err)
+		if err := <-serverErrors; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr = errors.Join(serveErr, fmt.Errorf("serve HTTP during shutdown: %w", err))
+		}
 	}
 
-	if err := <-serverErrors; err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("serve HTTP during shutdown: %w", err)
+	closeErr := app.Close(shutdownCtx)
+	if closeErr != nil {
+		app.Logger.Error("close application", "error", closeErr)
 	}
 
-	app.Logger.Info("HTTP server stopped")
-
-	return nil
+	return errors.Join(serveErr, shutdownErr, closeErr)
 }
